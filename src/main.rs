@@ -1,10 +1,10 @@
 use log::{error, info};
 use std::{
-    io::Read,
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
 
-use byteorder::{BigEndian, ReadBytesExt};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 
 #[derive(Debug)]
@@ -30,13 +30,53 @@ impl RequestHeader {
         cursor.read_exact(&mut unparsed_client_id).unwrap();
 
         let client_id = String::from_utf8(unparsed_client_id).expect("Invalid utf8 sequence");
-        info!("This is the client id: {:?}", client_id);
+
         RequestHeader {
             request_api_key: request_api_key,
             request_api_version: request_api_version,
             correlation_id: correlation_id,
             client_id: client_id,
         }
+    }
+}
+
+#[derive(Debug)]
+struct ApiKey {
+    api_key: i16,
+    min_version: i16,
+    max_version: i16,
+}
+
+#[derive(Debug)]
+struct ApiVersionsResponse {
+    error_code: i16,
+    api_keys: Vec<ApiKey>,
+    throttle_time_ms: i32,
+}
+
+impl ApiVersionsResponse {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        buffer.write_i16::<BigEndian>(self.error_code).unwrap();
+
+        buffer
+            .write_i32::<BigEndian>(self.api_keys.len() as i32)
+            .unwrap();
+        for api_key in &self.api_keys {
+            buffer.write_i16::<BigEndian>(api_key.api_key).unwrap();
+            buffer.write_i16::<BigEndian>(api_key.min_version).unwrap();
+            buffer.write_i16::<BigEndian>(api_key.max_version).unwrap();
+        }
+
+        buffer
+            .write_i32::<BigEndian>(self.throttle_time_ms)
+            .unwrap();
+
+        // Prefix the message length
+        let mut full_response = Vec::new();
+        full_response.write_i32::<BigEndian>(buffer.len() as i32);
+        full_response.extend_from_slice(&buffer);
+        full_response
     }
 }
 
@@ -51,8 +91,23 @@ fn handle_connection(mut stream: TcpStream) {
                 break;
             }
             Ok(n) => {
+                info!("{:?}", buffer);
                 let header = RequestHeader::parse(&buffer);
-                info!("{:?}", header)
+                info!("{:?}", header);
+
+                // Do fake response
+                let response = ApiVersionsResponse {
+                    error_code: 0,
+                    api_keys: vec![ApiKey {
+                        api_key: 0,
+                        min_version: 0,
+                        max_version: 2,
+                    }],
+                    throttle_time_ms: 0,
+                };
+
+                stream.write(&response.to_bytes()).unwrap();
+                stream.flush().unwrap();
             }
             Err(..) => {
                 error!("Error");
