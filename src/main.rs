@@ -1,3 +1,10 @@
+use kafka_protocol::messages::ApiKey as OtherApiKey;
+use kafka_protocol::messages::ApiKey as RequestKind;
+use kafka_protocol::messages::ApiVersionsRequest;
+use kafka_protocol::protocol::buf::ByteBuf;
+use bytes::{BytesMut, Buf, Bytes};
+use kafka_protocol::messages::RequestHeader as OtherRequestHeader;
+use kafka_protocol::protocol::{Encodable, Decodable, StrBytes, HeaderVersion};
 use log::{error, info};
 use std::{
     io::{Read, Write},
@@ -9,6 +16,8 @@ use std::io::Cursor;
 
 #[derive(Debug)]
 struct RequestHeader {
+    // TODO: Maybe add a total size thing here so that this can be used as an offset to parsing the rest
+    // of the message.
     request_api_key: i16,
     request_api_version: i16,
     correlation_id: i32,
@@ -55,6 +64,7 @@ struct ApiVersionsResponse {
 }
 
 impl ApiVersionsResponse {
+    // TODO: Put this into traits for Responses. Do the same with requests.
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
         buffer.write_i16::<BigEndian>(self.error_code).unwrap();
@@ -74,7 +84,7 @@ impl ApiVersionsResponse {
 
         // Prefix the message length
         let mut full_response = Vec::new();
-        full_response.write_i32::<BigEndian>(buffer.len() as i32);
+        let _ = full_response.write_i32::<BigEndian>(buffer.len() as i32);
         full_response.extend_from_slice(&buffer);
         full_response
     }
@@ -91,23 +101,44 @@ fn handle_connection(mut stream: TcpStream) {
                 break;
             }
             Ok(n) => {
-                info!("{:?}", buffer);
+                // info!("{:?}", buffer);
+                // Old stuff. TODO: Remove and go with new.
                 let header = RequestHeader::parse(&buffer);
-                info!("{:?}", header);
+                dbg!(&header);
 
+
+                let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+
+                let api_key = new_buf.peek_bytes(0..2).get_i16();
+                let api_version = new_buf.peek_bytes(2..4).get_i16();
+                let header_version = OtherApiKey::try_from(api_key).unwrap().request_header_version(api_version);
+
+                let header = OtherRequestHeader::decode(&mut new_buf, header_version).unwrap();
+                dbg!(&header);
+                let api_key = OtherApiKey::try_from(header.request_api_key);
+                dbg!(api_key);
+                let a = ApiVersionsRequest::decode(&mut Bytes::from(new_buf), header.request_api_version);
+                dbg!(a);
+                // RequestKind::ApiVersions(ApiVersionsRequest::decode(&mut Bytes::from(), header.request_api_version));
+                
+
+
+                // TODO: Add a function that handles the request by using the correct method and
+                // creating the correct response.
                 // Do fake response
                 let response = ApiVersionsResponse {
                     error_code: 0,
                     api_keys: vec![ApiKey {
-                        api_key: 0,
+                        api_key: 1,
                         min_version: 0,
-                        max_version: 2,
+                        max_version: 10,
                     }],
                     throttle_time_ms: 0,
                 };
 
-                stream.write(&response.to_bytes()).unwrap();
-                stream.flush().unwrap();
+                // stream.write(&response.to_bytes()).unwrap();
+                // stream.flush().unwrap();
+
             }
             Err(..) => {
                 error!("Error");
