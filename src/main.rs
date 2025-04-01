@@ -1,9 +1,9 @@
-use kafka_protocol::messages::ApiKey as OtherApiKey;
+use kafka_protocol::messages::ApiKey as ApiKey;
 use kafka_protocol::messages::ApiKey as RequestKind;
 use kafka_protocol::messages::ApiVersionsRequest;
 use kafka_protocol::protocol::buf::ByteBuf;
 use bytes::{BytesMut, Buf, Bytes};
-use kafka_protocol::messages::RequestHeader as OtherRequestHeader;
+use kafka_protocol::messages::RequestHeader as RequestHeader;
 use kafka_protocol::protocol::{Encodable, Decodable, StrBytes, HeaderVersion};
 use log::{error, info};
 use std::{
@@ -12,45 +12,9 @@ use std::{
 };
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::io::Cursor;
 
 #[derive(Debug)]
-struct RequestHeader {
-    // TODO: Maybe add a total size thing here so that this can be used as an offset to parsing the rest
-    // of the message.
-    request_api_key: i16,
-    request_api_version: i16,
-    correlation_id: i32,
-    client_id: String,
-}
-
-impl RequestHeader {
-    fn parse(buffer: &[u8; 512]) -> Self {
-        let mut cursor = Cursor::new(&buffer);
-
-        let size = cursor.read_i32::<BigEndian>().unwrap();
-
-        let request_api_key = cursor.read_i16::<BigEndian>().unwrap();
-        let request_api_version = cursor.read_i16::<BigEndian>().unwrap();
-        let correlation_id = cursor.read_i32::<BigEndian>().unwrap();
-        let size_of_client_id = cursor.read_i16::<BigEndian>().unwrap();
-
-        let mut unparsed_client_id = vec![0; size_of_client_id.try_into().unwrap()];
-        cursor.read_exact(&mut unparsed_client_id).unwrap();
-
-        let client_id = String::from_utf8(unparsed_client_id).expect("Invalid utf8 sequence");
-
-        RequestHeader {
-            request_api_key: request_api_key,
-            request_api_version: request_api_version,
-            correlation_id: correlation_id,
-            client_id: client_id,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ApiKey {
+struct ResponseApiKey {
     api_key: i16,
     min_version: i16,
     max_version: i16,
@@ -59,7 +23,7 @@ struct ApiKey {
 #[derive(Debug)]
 struct ApiVersionsResponse {
     error_code: i16,
-    api_keys: Vec<ApiKey>,
+    api_keys: Vec<ResponseApiKey>,
     throttle_time_ms: i32,
 }
 
@@ -101,21 +65,15 @@ fn handle_connection(mut stream: TcpStream) {
                 break;
             }
             Ok(n) => {
-                // info!("{:?}", buffer);
-                // Old stuff. TODO: Remove and go with new.
-                let header = RequestHeader::parse(&buffer);
-                dbg!(&header);
-
-
                 let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
 
                 let api_key = new_buf.peek_bytes(0..2).get_i16();
                 let api_version = new_buf.peek_bytes(2..4).get_i16();
-                let header_version = OtherApiKey::try_from(api_key).unwrap().request_header_version(api_version);
+                let header_version = ApiKey::try_from(api_key).unwrap().request_header_version(api_version);
 
-                let header = OtherRequestHeader::decode(&mut new_buf, header_version).unwrap();
+                let header = RequestHeader::decode(&mut new_buf, header_version).unwrap();
                 dbg!(&header);
-                let api_key = OtherApiKey::try_from(header.request_api_key);
+                let api_key = ApiKey::try_from(header.request_api_key);
                 dbg!(api_key);
                 let a = ApiVersionsRequest::decode(&mut Bytes::from(new_buf), header.request_api_version);
                 dbg!(a);
@@ -128,7 +86,7 @@ fn handle_connection(mut stream: TcpStream) {
                 // Do fake response
                 let response = ApiVersionsResponse {
                     error_code: 0,
-                    api_keys: vec![ApiKey {
+                    api_keys: vec![ResponseApiKey {
                         api_key: 1,
                         min_version: 0,
                         max_version: 10,
