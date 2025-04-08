@@ -1,13 +1,11 @@
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpStream;
-use std::str::from_utf8;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::Parser;
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-use kafka_protocol::messages::{ApiKey, ProduceRequest, RequestHeader, TopicName, produce_request};
+use kafka_protocol::messages::{ApiKey, ProduceRequest, RequestHeader, TopicName};
 use kafka_protocol::protocol::{Encodable, StrBytes};
-use log::{error, info};
 
 #[derive(Parser, Debug)]
 #[command(name = "herbert-produce-cli")]
@@ -61,7 +59,6 @@ fn create_buffer(header: RequestHeader, request: impl Encodable) -> BytesMut {
 
 fn main() -> std::io::Result<()> {
     env_logger::init();
-    info!("Hello from the Herbert CLI");
     let args = Args::parse();
 
     let mut stream = TcpStream::connect(args.broker)?;
