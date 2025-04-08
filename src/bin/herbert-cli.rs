@@ -2,11 +2,30 @@ use std::net::TcpStream;
 use std::io::{Read, Write};
 use std::str::from_utf8;
 
+use clap::Parser;
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{produce_request, ApiKey, ProduceRequest, RequestHeader, TopicName};
 use kafka_protocol::protocol::{Encodable, StrBytes};
 use log::{error, info};
+
+#[derive(Parser, Debug)]
+#[command(name = "herbert-produce-cli")]
+#[command(about = "This is herbert, say hello to him.", long_about = None)]
+struct Args {
+    /// Herbert broker address, e.g. 127.0.0.1:9092
+    #[arg(short, long)]
+    broker: String,
+
+    /// The topic to which you want to produce to
+    #[arg(short, long)]
+    topic: String,
+
+    /// The message you want to produce
+    #[arg(short, long)]
+    message: String,
+}
+
 
 fn create_request_header(request_api_key: i16, request_api_version: i16) -> RequestHeader {
     let mut header = RequestHeader::default();
@@ -45,14 +64,14 @@ fn create_buffer(header: RequestHeader, request: impl Encodable) -> BytesMut {
 fn main() -> std::io::Result<()> {
     env_logger::init();
     info!("Hello from the Herbert CLI");
+    let args = Args::parse();
 
-    let adress = "127.0.0.1:9001";
-    let mut stream = TcpStream::connect(adress)?;
+    let mut stream = TcpStream::connect(args.broker)?;
     let produce_request_api_version = 9;
 
     let header =  create_request_header(ApiKey::Produce as i16, produce_request_api_version);
-    let record = Bytes::from("Hi there, this works now!");
-    let produce_request = create_produce_request("foobar", record);
+    let record = Bytes::from(args.message);
+    let produce_request = create_produce_request(&args.topic, record);
 
     let request_buffer = create_buffer(header, produce_request);
     stream.write(&request_buffer)?;
