@@ -3,8 +3,9 @@ use std::net::TcpStream;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
+use kafka_protocol::messages::fetch_request::FetchTopic;
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-use kafka_protocol::messages::{ApiKey, ProduceRequest, RequestHeader, TopicName};
+use kafka_protocol::messages::{ApiKey, FetchRequest, ProduceRequest, RequestHeader, TopicName};
 use kafka_protocol::protocol::{Encodable, StrBytes};
 
 #[derive(Parser, Debug)]
@@ -31,6 +32,21 @@ enum Command {
         #[arg(short, long)]
         message: String,
     },
+
+    /// Consume message(s) from herbert
+    Consume {
+        /// Herbert broker address, e.g. 127.0.0.1:9092
+        #[arg(short, long)]
+        broker: String,
+
+        /// The topic from which you want to comsume to
+        #[arg(short, long)]
+        topic: String,
+
+        /// The number of message you want to consume in maximum
+        #[arg(short, long)]
+        max_messages: i32,
+    },
 }
 
 fn create_request_header(request_api_key: i16, request_api_version: i16) -> RequestHeader {
@@ -53,6 +69,18 @@ fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
 
     produce_request.topic_data.push(topic_to_produce_to);
     produce_request
+}
+
+fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
+    let mut fetch_request = FetchRequest::default();
+
+    fetch_request.max_bytes = max_messages;
+
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName::from(StrBytes::from_string(topic.to_string()));
+
+    fetch_request.topics.push(fetch_topic);
+    fetch_request
 }
 
 fn create_buffer(header: RequestHeader, request: impl Encodable) -> BytesMut {
@@ -84,6 +112,22 @@ fn main() -> std::io::Result<()> {
             let produce_request = create_produce_request(&topic, record);
 
             let request_buffer = create_buffer(header, produce_request);
+            stream.write(&request_buffer)?;
+
+            Ok(())
+        }
+        Command::Consume {
+            broker,
+            topic,
+            max_messages,
+        } => {
+            let mut stream = TcpStream::connect(broker)?;
+            let fetch_request_api_version = 9;
+
+            let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
+            let fetch_request = create_fetch_request(&topic, max_messages);
+
+            let request_buffer = create_buffer(header, fetch_request);
             stream.write(&request_buffer)?;
 
             Ok(())
