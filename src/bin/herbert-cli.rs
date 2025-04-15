@@ -2,26 +2,35 @@ use std::io::Write;
 use std::net::TcpStream;
 
 use bytes::{BufMut, Bytes, BytesMut};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ApiKey, ProduceRequest, RequestHeader, TopicName};
 use kafka_protocol::protocol::{Encodable, StrBytes};
 
 #[derive(Parser, Debug)]
-#[command(name = "herbert-produce-cli")]
+#[command(name = "herbert--cli")]
 #[command(about = "This is herbert, say hello to him.", long_about = None)]
 struct Args {
-    /// Herbert broker address, e.g. 127.0.0.1:9092
-    #[arg(short, long)]
-    broker: String,
+    #[command(subcommand)]
+    command: Command,
+}
 
-    /// The topic to which you want to produce to
-    #[arg(short, long)]
-    topic: String,
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Produce a message to herbert
+    Produce {
+        /// Herbert broker address, e.g. 127.0.0.1:9092
+        #[arg(short, long)]
+        broker: String,
 
-    /// The message you want to produce
-    #[arg(short, long)]
-    message: String,
+        /// The topic to which you want to produce to
+        #[arg(short, long)]
+        topic: String,
+
+        /// The message you want to produce
+        #[arg(short, long)]
+        message: String,
+    },
 }
 
 fn create_request_header(request_api_key: i16, request_api_version: i16) -> RequestHeader {
@@ -61,15 +70,23 @@ fn main() -> std::io::Result<()> {
     env_logger::init();
     let args = Args::parse();
 
-    let mut stream = TcpStream::connect(args.broker)?;
-    let produce_request_api_version = 9;
+    match args.command {
+        Command::Produce {
+            broker,
+            topic,
+            message,
+        } => {
+            let mut stream = TcpStream::connect(broker)?;
+            let produce_request_api_version = 9;
 
-    let header = create_request_header(ApiKey::Produce as i16, produce_request_api_version);
-    let record = Bytes::from(args.message);
-    let produce_request = create_produce_request(&args.topic, record);
+            let header = create_request_header(ApiKey::Produce as i16, produce_request_api_version);
+            let record = Bytes::from(message);
+            let produce_request = create_produce_request(&topic, record);
 
-    let request_buffer = create_buffer(header, produce_request);
-    stream.write(&request_buffer)?;
+            let request_buffer = create_buffer(header, produce_request);
+            stream.write(&request_buffer)?;
 
-    Ok(())
+            Ok(())
+        }
+    }
 }
