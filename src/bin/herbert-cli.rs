@@ -74,6 +74,7 @@ fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
 fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
 
+    // FIXME: Max bytes does not work. Herbet can't decode it somehow.
     fetch_request.max_bytes = max_messages;
 
     let mut fetch_topic = FetchTopic::default();
