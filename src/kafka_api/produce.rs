@@ -34,3 +34,38 @@ fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic: &Lazy<RwLock<VecD
     write.push_front(record);
     info!("Currently topic has {:?}", write);
 }
+
+
+#[cfg(test)]
+mod tests {
+    use kafka_protocol::{messages::{produce_request::PartitionProduceData, TopicName}, protocol::StrBytes};
+
+    use super::*;
+
+    #[test]
+    fn test_handle_topic_data() {
+
+        let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
+        let mut topic_data = Vec::new();
+
+
+        let mut topic_to_produce_to = TopicProduceData::default();
+        topic_to_produce_to.name = TopicName::from(StrBytes::from_string("test".to_string()));
+
+        let mut things_to_produce = PartitionProduceData::default();
+        things_to_produce.records = Some(Bytes::from("test"));
+
+        topic_to_produce_to.partition_data.push(things_to_produce);
+
+
+        topic_data.push(topic_to_produce_to);
+
+        handle_topic_data(topic_data, &topic);
+
+        let read = topic.read().unwrap();
+        let message = read.get(0).unwrap();
+
+        assert_eq!(*message, Bytes::from("test"))
+
+    }
+}

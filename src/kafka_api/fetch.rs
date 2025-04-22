@@ -22,3 +22,19 @@ pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic: &Lazy<RwLock<Ve
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handle_fetch_request() {
+
+        let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
+        let buf = Bytes::new();
+        let api_version = 5;
+        handle_fetch_request(buf, api_version, &topic);
+        // TODO: write sensicel test.
+    }
+}
