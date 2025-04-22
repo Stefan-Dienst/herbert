@@ -9,7 +9,6 @@ use std::sync::RwLock;
 
 use crate::topic_manager::{self, TopicManager};
 
-
 pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
 
@@ -28,7 +27,7 @@ pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &mut To
     match fetch_request {
         Ok(FetchRequest { max_bytes, .. }) => {
             topic_manager.remove();
-            }
+        }
         _ => {
             error!("Something wrong with the fetch request.")
         }
@@ -49,7 +48,11 @@ mod tests {
         let mut request_buffer = BytesMut::new();
         let fetch_request_api_version = 9;
         fetch_request.encode(&mut request_buffer, fetch_request_api_version);
-        handle_fetch_request(request_buffer.into(), fetch_request_api_version, &mut topic_manager);
+        handle_fetch_request(
+            request_buffer.into(),
+            fetch_request_api_version,
+            &mut topic_manager,
+        );
         // TODO: write sensicel test so that something is actually retured.
     }
 }

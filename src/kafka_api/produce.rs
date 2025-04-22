@@ -85,7 +85,11 @@ mod tests {
         let mut request_buffer = BytesMut::new();
         let produce_request_api_version = 9;
         produce_request.encode(&mut request_buffer, produce_request_api_version);
-        handle_produce_request(request_buffer.into(), produce_request_api_version, &mut topic_manager);
+        handle_produce_request(
+            request_buffer.into(),
+            produce_request_api_version,
+            &mut topic_manager,
+        );
 
         let read = topic_manager.topic.read().unwrap();
         let message = read.get(0).unwrap();

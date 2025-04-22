@@ -1,7 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
 use herbert::kafka_api::handle_fetch_request;
 use herbert::kafka_api::handle_produce_request;
-use herbert::topic_manager;
 use herbert::topic_manager::TopicManager;
 use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::RequestHeader;
@@ -9,14 +8,11 @@ use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::protocol::buf::ByteBuf;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
-use once_cell::sync::Lazy;
-use std::collections::VecDeque;
-use std::sync::RwLock;
+
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
-
 
 fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
     info!("I have received a connection!");
@@ -81,7 +77,6 @@ fn main() -> std::io::Result<()> {
 
     info!("Starting the TCP server. Listening on {:?}", adress);
     let listener = TcpListener::bind(adress)?;
-
 
     let mut topic_manager = TopicManager::new();
 

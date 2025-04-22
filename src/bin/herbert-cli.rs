@@ -3,8 +3,8 @@ use std::net::TcpStream;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
-use herbert::kafka_api::create_produce_request;
 use herbert::kafka_api::create_fetch_request;
+use herbert::kafka_api::create_produce_request;
 use kafka_protocol::messages::{ApiKey, RequestHeader};
 use kafka_protocol::protocol::Encodable;
 
