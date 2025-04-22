@@ -40,6 +40,11 @@ pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &mut 
 }
 
 fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic_manager: &mut TopicManager) {
+    let topic_name = topic_data
+        .first()
+        .unwrap()
+        .name.to_string();
+
     let record = topic_data
         .first()
         .unwrap()
@@ -49,7 +54,7 @@ fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic_manager: &mut Topi
         .records
         .clone()
         .unwrap();
-    topic_manager.add(record)
+    topic_manager.add(&topic_name, record)
 }
 
 #[cfg(test)]
@@ -68,8 +73,8 @@ mod tests {
 
         handle_topic_data(produce_request.topic_data, &mut topic_manager);
 
-        let read = topic_manager.topic.read().unwrap();
-        let message = read.get(0).unwrap();
+        let read = topic_manager.topics.read().unwrap();
+        let message = read.get(topic_name).unwrap().get(0).unwrap();
 
         assert_eq!(*message, record)
     }
@@ -91,8 +96,9 @@ mod tests {
             &mut topic_manager,
         );
 
-        let read = topic_manager.topic.read().unwrap();
-        let message = read.get(0).unwrap();
+
+        let read = topic_manager.topics.read().unwrap();
+        let message = read.get(topic_name).unwrap().get(0).unwrap();
 
         assert_eq!(*message, record)
     }

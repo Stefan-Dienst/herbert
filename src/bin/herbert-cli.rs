@@ -95,7 +95,7 @@ fn main() -> std::io::Result<()> {
             max_messages,
         } => {
             let mut stream = TcpStream::connect(broker)?;
-            let fetch_request_api_version = 5;
+            let fetch_request_api_version = 1;
 
             let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
             let fetch_request = create_fetch_request(&topic, max_messages);

@@ -25,8 +25,9 @@ pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
 pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &mut TopicManager) {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
-        Ok(FetchRequest { max_bytes, .. }) => {
-            topic_manager.remove();
+        Ok(FetchRequest { max_bytes, topics, .. }) => {
+            let topic_name = topics.first().unwrap().topic.to_string();
+            topic_manager.remove(&topic_name);
         }
         _ => {
             error!("Something wrong with the fetch request.")
@@ -42,7 +43,7 @@ mod tests {
     fn test_handle_fetch_request() {
         let mut topic_manager = TopicManager::new();
         let record = Bytes::from("test");
-        topic_manager.add(record.clone());
+        topic_manager.add("foobar", record.clone());
 
         let fetch_request = create_fetch_request("test", 3);
         let mut request_buffer = BytesMut::new();
