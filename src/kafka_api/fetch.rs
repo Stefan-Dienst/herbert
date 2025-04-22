@@ -45,9 +45,15 @@ mod tests {
     #[test]
     fn test_handle_fetch_request() {
         let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
-        let buf = Bytes::new();
-        let api_version = 5;
-        handle_fetch_request(buf, api_version, &topic);
-        // TODO: write sensicel test.
+        let mut write = topic.write().unwrap();
+        write.push_back(Bytes::from("test"));
+        drop(write);
+
+        let fetch_request = create_fetch_request("test", 3);
+        let mut request_buffer = BytesMut::new();
+        let fetch_request_api_version = 9;
+        fetch_request.encode(&mut request_buffer, fetch_request_api_version);
+        handle_fetch_request(request_buffer.into(), fetch_request_api_version, &topic);
+        // TODO: write sensicel test so that something is actually retured.
     }
 }
