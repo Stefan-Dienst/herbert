@@ -74,7 +74,6 @@ fn handle_connection(mut stream: TcpStream) {
 
 fn main() -> std::io::Result<()> {
     env_logger::init();
-    add(1, 2);
     let adress = "127.0.0.1:9001";
 
     info!("Create the topic");
@@ -93,18 +92,4 @@ fn main() -> std::io::Result<()> {
         }
     }
     Ok(())
-}
-
-fn add(x: i32, y: i32) -> i32 {
-    x + y
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_add() {
-        assert_eq!(add(1, 2), 1 + 2)
-    }
 }
