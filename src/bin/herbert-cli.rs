@@ -5,10 +5,8 @@ use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use herbert::kafka_api::create_produce_request;
 use herbert::kafka_api::create_fetch_request;
-use kafka_protocol::messages::fetch_request::FetchTopic;
-use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-use kafka_protocol::messages::{ApiKey, FetchRequest, ProduceRequest, RequestHeader, TopicName};
-use kafka_protocol::protocol::{Encodable, StrBytes};
+use kafka_protocol::messages::{ApiKey, RequestHeader};
+use kafka_protocol::protocol::Encodable;
 
 #[derive(Parser, Debug)]
 #[command(name = "herbert--cli")]
