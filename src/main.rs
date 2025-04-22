@@ -1,11 +1,7 @@
 use bytes::{Buf, Bytes, BytesMut};
 use kafka_protocol::messages::ApiKey;
-use kafka_protocol::messages::FetchRequest;
-use kafka_protocol::messages::ProduceRequest;
 use kafka_protocol::messages::RequestHeader;
 use kafka_protocol::messages::ResponseHeader;
-use kafka_protocol::messages::alter_partition_request::TopicData;
-use kafka_protocol::messages::produce_request::TopicProduceData;
 use kafka_protocol::protocol::buf::ByteBuf;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
@@ -16,6 +12,10 @@ use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
+use kafka_api::handle_produce_request;
+use kafka_api::handle_fetch_request;
+
+mod kafka_api;
 
 static TOPIC: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
@@ -53,10 +53,10 @@ fn handle_connection(mut stream: TcpStream) {
 
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        handle_produce_request(new_buf, header.request_api_version);
+                        handle_produce_request(new_buf, header.request_api_version, &TOPIC);
                     },
                     Ok(ApiKey::Fetch) => {
-                        handle_fetch_request(new_buf, header.request_api_version);
+                        handle_fetch_request(new_buf, header.request_api_version, &TOPIC);
                     },
                     _ => {
                         info!("This request of the kafka protocol is not yet covered. :(");
@@ -74,49 +74,7 @@ fn handle_connection(mut stream: TcpStream) {
     }
 }
 
-fn handle_produce_request(buf: Bytes, api_version: i16) {
-    let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
-    match produce_request {
-        Ok(ProduceRequest { topic_data, .. }) => {
-            handle_topic_data(topic_data);
-        }
-        _ => {
-            error!("Something wrong with the produce request.")
-        }
-    }
-}
 
-fn handle_topic_data(topic_data: Vec<TopicProduceData>) {
-    let record = topic_data
-        .first()
-        .unwrap()
-        .partition_data
-        .first()
-        .unwrap()
-        .records
-        .clone()
-        .unwrap();
-    let mut write = TOPIC.write().unwrap();
-    write.push_front(record);
-    info!("Currently topic has {:?}", write);
-}
-
-fn handle_fetch_request(buf: Bytes, api_version: i16) {
-    let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
-    match fetch_request {
-        Ok(FetchRequest { max_bytes, .. }) => {
-            let mut write = TOPIC.write().unwrap();
-            dbg!(max_bytes);
-            while !write.is_empty() {
-                let message = write.pop_back().unwrap();
-                info!("Found message {:?}", message);
-            }
-        },
-        _ => {
-            error!("Something wrong with the fetch request.")
-        }
-    }
-}
 
 fn main() -> std::io::Result<()> {
     env_logger::init();
