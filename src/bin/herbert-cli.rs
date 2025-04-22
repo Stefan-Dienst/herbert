@@ -7,6 +7,7 @@ use kafka_protocol::messages::fetch_request::FetchTopic;
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ApiKey, FetchRequest, ProduceRequest, RequestHeader, TopicName};
 use kafka_protocol::protocol::{Encodable, StrBytes};
+use herbert::kafka_api::create_produce_request;
 
 #[derive(Parser, Debug)]
 #[command(name = "herbert--cli")]
@@ -56,20 +57,6 @@ fn create_request_header(request_api_key: i16, request_api_version: i16) -> Requ
     header
 }
 
-fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
-    let mut produce_request = ProduceRequest::default();
-
-    let mut topic_to_produce_to = TopicProduceData::default();
-    topic_to_produce_to.name = TopicName::from(StrBytes::from_string(topic.to_string()));
-
-    let mut things_to_produce = PartitionProduceData::default();
-    things_to_produce.records = Some(record);
-
-    topic_to_produce_to.partition_data.push(things_to_produce);
-
-    produce_request.topic_data.push(topic_to_produce_to);
-    produce_request
-}
 
 fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();

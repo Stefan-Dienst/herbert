@@ -1,11 +1,27 @@
 use bytes::{Buf, Bytes, BytesMut};
-use kafka_protocol::messages::ProduceRequest;
-use kafka_protocol::messages::produce_request::TopicProduceData;
-use kafka_protocol::protocol::Decodable;
+use kafka_protocol::messages::{ProduceRequest, TopicName};
+use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::RwLock;
+
+pub fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
+    let mut produce_request = ProduceRequest::default();
+
+    let mut topic_to_produce_to = TopicProduceData::default();
+    topic_to_produce_to.name = TopicName::from(StrBytes::from_string(topic.to_string()));
+
+    let mut things_to_produce = PartitionProduceData::default();
+    things_to_produce.records = Some(record);
+
+    topic_to_produce_to.partition_data.push(things_to_produce);
+
+    produce_request.topic_data.push(topic_to_produce_to);
+    produce_request
+}
+
 
 pub fn handle_produce_request(buf: Bytes, api_version: i16, topic: &Lazy<RwLock<VecDeque<Bytes>>>) {
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
@@ -34,6 +50,8 @@ fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic: &Lazy<RwLock<VecD
     write.push_front(record);
     info!("Currently topic has {:?}", write);
 }
+
+
 
 
 #[cfg(test)]

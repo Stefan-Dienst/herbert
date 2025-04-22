@@ -12,10 +12,9 @@ use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
-use kafka_api::handle_produce_request;
-use kafka_api::handle_fetch_request;
+use herbert::kafka_api::handle_produce_request;
+use herbert::kafka_api::handle_fetch_request;
 
-mod kafka_api;
 
 static TOPIC: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
