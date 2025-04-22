@@ -1,4 +1,6 @@
 use bytes::{Buf, Bytes, BytesMut};
+use herbert::kafka_api::handle_fetch_request;
+use herbert::kafka_api::handle_produce_request;
 use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::RequestHeader;
 use kafka_protocol::messages::ResponseHeader;
@@ -12,9 +14,6 @@ use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
-use herbert::kafka_api::handle_produce_request;
-use herbert::kafka_api::handle_fetch_request;
-
 
 static TOPIC: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
@@ -53,10 +52,10 @@ fn handle_connection(mut stream: TcpStream) {
                 match api_key {
                     Ok(ApiKey::Produce) => {
                         handle_produce_request(new_buf, header.request_api_version, &TOPIC);
-                    },
+                    }
                     Ok(ApiKey::Fetch) => {
                         handle_fetch_request(new_buf, header.request_api_version, &TOPIC);
-                    },
+                    }
                     _ => {
                         info!("This request of the kafka protocol is not yet covered. :(");
                     }
@@ -72,8 +71,6 @@ fn handle_connection(mut stream: TcpStream) {
         }
     }
 }
-
-
 
 fn main() -> std::io::Result<()> {
     env_logger::init();

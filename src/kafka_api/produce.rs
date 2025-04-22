@@ -1,6 +1,6 @@
-use bytes::{BytesMut, Bytes};
-use kafka_protocol::messages::{ProduceRequest, TopicName};
+use bytes::{Bytes, BytesMut};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+use kafka_protocol::messages::{ProduceRequest, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::{error, info};
 use once_cell::sync::Lazy;
@@ -25,7 +25,6 @@ fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     topic_to_produce_to
 }
 
-
 pub fn handle_produce_request(buf: Bytes, api_version: i16, topic: &Lazy<RwLock<VecDeque<Bytes>>>) {
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
     match produce_request {
@@ -37,7 +36,6 @@ pub fn handle_produce_request(buf: Bytes, api_version: i16, topic: &Lazy<RwLock<
         }
     }
 }
-
 
 fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic: &Lazy<RwLock<VecDeque<Bytes>>>) {
     let record = topic_data
@@ -53,9 +51,6 @@ fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic: &Lazy<RwLock<VecD
     write.push_front(record);
     info!("Currently topic has {:?}", write);
 }
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -87,7 +82,6 @@ mod tests {
         let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
         let produce_request = create_produce_request(&topic_name, record.clone());
 
-
         let mut request_buffer = BytesMut::new();
         let produce_request_api_version = 9;
         produce_request.encode(&mut request_buffer, produce_request_api_version);
@@ -98,5 +92,4 @@ mod tests {
 
         assert_eq!(*message, record)
     }
-
 }
