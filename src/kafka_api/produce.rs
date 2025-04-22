@@ -1,4 +1,4 @@
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{BytesMut, Bytes};
 use kafka_protocol::messages::{ProduceRequest, TopicName};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::protocol::{Decodable, StrBytes};
@@ -9,7 +9,12 @@ use std::sync::RwLock;
 
 pub fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
     let mut produce_request = ProduceRequest::default();
+    let topic_to_produce_to = create_topic_produce_data(topic, record);
+    produce_request.topic_data.push(topic_to_produce_to);
+    produce_request
+}
 
+fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     let mut topic_to_produce_to = TopicProduceData::default();
     topic_to_produce_to.name = TopicName::from(StrBytes::from_string(topic.to_string()));
 
@@ -17,9 +22,7 @@ pub fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
     things_to_produce.records = Some(record);
 
     topic_to_produce_to.partition_data.push(things_to_produce);
-
-    produce_request.topic_data.push(topic_to_produce_to);
-    produce_request
+    topic_to_produce_to
 }
 
 
@@ -56,34 +59,44 @@ fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic: &Lazy<RwLock<VecD
 
 #[cfg(test)]
 mod tests {
-    use kafka_protocol::{messages::{produce_request::PartitionProduceData, TopicName}, protocol::StrBytes};
+    use kafka_protocol::protocol::Encodable;
 
     use super::*;
 
     #[test]
     fn test_handle_topic_data() {
+        let topic_name = "test";
+        let record = Bytes::from("yeah");
 
         let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
-        let mut topic_data = Vec::new();
+        let produce_request = create_produce_request(&topic_name, record.clone());
 
-
-        let mut topic_to_produce_to = TopicProduceData::default();
-        topic_to_produce_to.name = TopicName::from(StrBytes::from_string("test".to_string()));
-
-        let mut things_to_produce = PartitionProduceData::default();
-        things_to_produce.records = Some(Bytes::from("test"));
-
-        topic_to_produce_to.partition_data.push(things_to_produce);
-
-
-        topic_data.push(topic_to_produce_to);
-
-        handle_topic_data(topic_data, &topic);
+        handle_topic_data(produce_request.topic_data, &topic);
 
         let read = topic.read().unwrap();
         let message = read.get(0).unwrap();
 
-        assert_eq!(*message, Bytes::from("test"))
-
+        assert_eq!(*message, record)
     }
+
+    #[test]
+    fn test_handle_produce_request() {
+        let topic_name = "test";
+        let record = Bytes::from("yeah");
+
+        let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
+        let produce_request = create_produce_request(&topic_name, record.clone());
+
+
+        let mut request_buffer = BytesMut::new();
+        let produce_request_api_version = 9;
+        produce_request.encode(&mut request_buffer, produce_request_api_version);
+        handle_produce_request(request_buffer.into(), produce_request_api_version, &topic);
+
+        let read = topic.read().unwrap();
+        let message = read.get(0).unwrap();
+
+        assert_eq!(*message, record)
+    }
+
 }
