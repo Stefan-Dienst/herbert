@@ -1,6 +1,8 @@
 use bytes::{Buf, Bytes, BytesMut};
 use herbert::kafka_api::handle_fetch_request;
 use herbert::kafka_api::handle_produce_request;
+use herbert::topic_manager;
+use herbert::topic_manager::TopicManager;
 use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::RequestHeader;
 use kafka_protocol::messages::ResponseHeader;
@@ -15,9 +17,8 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-static TOPIC: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
     info!("I have received a connection!");
     let mut buffer = [0; 512];
 
@@ -51,10 +52,10 @@ fn handle_connection(mut stream: TcpStream) {
 
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        handle_produce_request(new_buf, header.request_api_version, &TOPIC);
+                        handle_produce_request(new_buf, header.request_api_version, topic_manager);
                     }
                     Ok(ApiKey::Fetch) => {
-                        handle_fetch_request(new_buf, header.request_api_version, &TOPIC);
+                        handle_fetch_request(new_buf, header.request_api_version, topic_manager);
                     }
                     _ => {
                         info!("This request of the kafka protocol is not yet covered. :(");
@@ -81,10 +82,13 @@ fn main() -> std::io::Result<()> {
     info!("Starting the TCP server. Listening on {:?}", adress);
     let listener = TcpListener::bind(adress)?;
 
+
+    let mut topic_manager = TopicManager::new();
+
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                handle_connection(stream);
+                handle_connection(stream, &mut topic_manager);
             }
             Err(..) => {
                 error!("Oh oh!");

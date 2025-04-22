@@ -7,6 +7,8 @@ use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::RwLock;
 
+use crate::topic_manager::{self, TopicManager};
+
 
 pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
@@ -21,17 +23,12 @@ pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     fetch_request
 }
 
-pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic: &Lazy<RwLock<VecDeque<Bytes>>>) {
+pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &mut TopicManager) {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
         Ok(FetchRequest { max_bytes, .. }) => {
-            let mut write = topic.write().unwrap();
-            dbg!(max_bytes);
-            while !write.is_empty() {
-                let message = write.pop_back().unwrap();
-                info!("Found message {:?}", message);
+            topic_manager.remove();
             }
-        }
         _ => {
             error!("Something wrong with the fetch request.")
         }
@@ -44,16 +41,15 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request() {
-        let topic: Lazy<RwLock<VecDeque<Bytes>>> = Lazy::new(|| RwLock::new(VecDeque::new()));
-        let mut write = topic.write().unwrap();
-        write.push_back(Bytes::from("test"));
-        drop(write);
+        let mut topic_manager = TopicManager::new();
+        let record = Bytes::from("test");
+        topic_manager.add(record.clone());
 
         let fetch_request = create_fetch_request("test", 3);
         let mut request_buffer = BytesMut::new();
         let fetch_request_api_version = 9;
         fetch_request.encode(&mut request_buffer, fetch_request_api_version);
-        handle_fetch_request(request_buffer.into(), fetch_request_api_version, &topic);
+        handle_fetch_request(request_buffer.into(), fetch_request_api_version, &mut topic_manager);
         // TODO: write sensicel test so that something is actually retured.
     }
 }
