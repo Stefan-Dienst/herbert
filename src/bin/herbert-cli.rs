@@ -4,6 +4,7 @@ use std::net::TcpStream;
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use herbert::kafka_api::create_produce_request;
+use herbert::kafka_api::create_fetch_request;
 use kafka_protocol::messages::fetch_request::FetchTopic;
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ApiKey, FetchRequest, ProduceRequest, RequestHeader, TopicName};
@@ -55,19 +56,6 @@ fn create_request_header(request_api_key: i16, request_api_version: i16) -> Requ
     header.request_api_key = request_api_key;
     header.request_api_version = request_api_version;
     header
-}
-
-fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
-    let mut fetch_request = FetchRequest::default();
-
-    // FIXME: Max bytes does not work. Herbet can't decode it somehow.
-    fetch_request.max_bytes = max_messages;
-
-    let mut fetch_topic = FetchTopic::default();
-    fetch_topic.topic = TopicName::from(StrBytes::from_string(topic.to_string()));
-
-    fetch_request.topics.push(fetch_topic);
-    fetch_request
 }
 
 fn create_buffer(header: RequestHeader, request: impl Encodable) -> BytesMut {

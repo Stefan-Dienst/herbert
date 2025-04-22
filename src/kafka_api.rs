@@ -1,5 +1,5 @@
 mod fetch;
 mod produce;
 
-pub use fetch::handle_fetch_request;
+pub use fetch::*;
 pub use produce::*;
