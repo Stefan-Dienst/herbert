@@ -8,6 +8,7 @@ use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::protocol::buf::ByteBuf;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
+use anyhow::Result;
 
 use std::sync::Arc;
 use std::thread;
@@ -16,7 +17,7 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) {
+fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->  Result<()> {
     info!("I have received a connection!");
     let mut buffer = [0; 512];
 
@@ -51,10 +52,10 @@ fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) {
 
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        handle_produce_request(new_buf, header.request_api_version, &topic_manager);
+                        let _ = handle_produce_request(new_buf, header.request_api_version, &topic_manager);
                     }
                     Ok(ApiKey::Fetch) => {
-                        let response = handle_fetch_request(new_buf, header.request_api_version, &topic_manager);
+                        let response = handle_fetch_request(new_buf, header.request_api_version, &topic_manager)?;
 
                         size += response_header.compute_size(response_header_api_version).unwrap();
                         size += response.compute_size(header.request_api_version).unwrap();
@@ -79,6 +80,7 @@ fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) {
             }
         }
     }
+    Ok(())
 }
 
 fn main() -> std::io::Result<()> {

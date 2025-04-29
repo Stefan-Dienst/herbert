@@ -1,3 +1,4 @@
+use anyhow::Result;
 use bytes::{Buf, Bytes, BytesMut};
 use kafka_protocol::messages::fetch_request::FetchTopic;
 use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
@@ -23,25 +24,33 @@ pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     fetch_request
 }
 
-pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) -> FetchResponse {
+pub fn handle_fetch_request(
+    buf: Bytes,
+    api_version: i16,
+    topic_manager: &Arc<TopicManager>,
+) -> Result<FetchResponse> {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
-        Ok(FetchRequest { max_bytes, topics, .. }) => {
-            let topic_name = topics.first().unwrap().topic.to_string();
+        Ok(FetchRequest {
+            max_bytes, topics, ..
+        }) => {
+            let first_topic = topics
+                .get(0)
+                .ok_or_else(|| anyhow::anyhow!("No Topic data available in fetch request"))?;
+            let topic_name = first_topic.topic.to_string();
             let records = topic_manager.remove(&topic_name);
 
-    let mut response = FetchResponse::default();
-    let mut topic_response = FetchableTopicResponse::default();
-    let mut partition_data = PartitionData::default();
-    partition_data.records = Some(records);
-    topic_response.partitions.push(partition_data);
-    response.responses.push(topic_response);
-    response
+            let mut response = FetchResponse::default();
+            let mut topic_response = FetchableTopicResponse::default();
+            let mut partition_data = PartitionData::default();
+            partition_data.records = Some(records);
+            topic_response.partitions.push(partition_data);
+            response.responses.push(topic_response);
+            Ok(response)
         }
         _ => {
             error!("Something wrong with the fetch request.");
-                panic!();
-
+            panic!();
         }
     }
 }
@@ -56,15 +65,25 @@ mod tests {
         let record = Bytes::from("test");
         topic_manager.add("foobar", record.clone());
 
-        let fetch_request = create_fetch_request("test", 3);
+        let fetch_request = create_fetch_request("foobar", 3);
         let mut request_buffer = BytesMut::new();
         let fetch_request_api_version = 9;
-        fetch_request.encode(&mut request_buffer, fetch_request_api_version);
-        handle_fetch_request(
+        let _ = fetch_request.encode(&mut request_buffer, fetch_request_api_version);
+        let response = handle_fetch_request(
             request_buffer.into(),
             fetch_request_api_version,
             &topic_manager,
         );
-        // TODO: write sensicel test so that something is actually retured.
+        let record = response
+            .unwrap()
+            .responses
+            .get(0)
+            .unwrap()
+            .partitions
+            .get(0)
+            .unwrap()
+            .records
+            .clone();
+        assert_eq!(record, Some(Bytes::from("test")))
     }
 }
