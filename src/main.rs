@@ -52,7 +52,7 @@ fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->
 
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        let _ = handle_produce_request(new_buf, header.request_api_version, &topic_manager);
+                        let _ = handle_produce_request(new_buf, header.request_api_version, &topic_manager)?;
                     }
                     Ok(ApiKey::Fetch) => {
                         let response = handle_fetch_request(new_buf, header.request_api_version, &topic_manager)?;
