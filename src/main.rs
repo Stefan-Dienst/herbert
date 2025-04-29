@@ -1,3 +1,6 @@
+use anyhow::Context;
+use byteorder::BigEndian;
+use byteorder::ReadBytesExt;
 use bytes::{Buf, Bytes, BytesMut, BufMut};
 use herbert::kafka_api::handle_fetch_request;
 use herbert::kafka_api::handle_produce_request;
@@ -17,31 +20,40 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
+
+
+
+fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
+        let mut len_buf = [0u8; 4];
+        stream.read_exact(&mut len_buf).context("Failed to read message length")?;
+        let msg_len = (&len_buf[..]).read_u32::<BigEndian>().context("Failed to parse message length")? as usize;
+        Ok(msg_len)
+}
+
+
 fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->  Result<()> {
     info!("I have received a connection!");
-    let mut buffer = [0; 512];
 
     loop {
-        match stream.read(&mut buffer) {
-            Ok(0) => {
-                info!("Client disconnected.");
-                break;
-            }
-            Ok(_n) => {
-                let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+        let msg_len = read_message_len(&mut stream)?;
+        let mut buf = vec![0u8; msg_len];
 
-                let api_key = new_buf.peek_bytes(0..2).get_i16();
-                let api_version = new_buf.peek_bytes(2..4).get_i16();
+        match stream.read_exact(&mut buf) {
+            Ok(()) => {
+                let mut buffer = Bytes::from(buf);
+
+                let api_key = buffer.peek_bytes(0..2).get_i16();
+                let api_version = buffer.peek_bytes(2..4).get_i16();
                 let header_version = ApiKey::try_from(api_key)
                     .unwrap()
                     .request_header_version(api_version);
                 // info!("The header version: {:?}", header_version);
 
-                let header = RequestHeader::decode(&mut new_buf, header_version).unwrap();
+                let header = RequestHeader::decode(&mut buffer, header_version).unwrap();
                 let api_key = ApiKey::try_from(header.request_api_key);
 
-                // info!("The api key: {:?}", api_key);
-                // info!("The api version: {:?}", api_version);
+                info!("The api key: {:?}", api_key);
+                info!("The api version: {:?}", api_version);
 
                 let mut response_buffer = BytesMut::new();
                 let mut response_header = ResponseHeader::default();
@@ -50,12 +62,15 @@ fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->
                 let response_header_api_version = 1;
                 let mut size = response_header.compute_size(header_version).unwrap();
 
+                //TODO: Wrap response in an enum, and implement ecode trait for it so that I can
+                //treat all response the same. This is needed as encode is not object safe to I
+                //can't use Box(dyn)...
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        let _ = handle_produce_request(new_buf, header.request_api_version, &topic_manager)?;
+                        let response = handle_produce_request(buffer, header.request_api_version, &topic_manager)?;
                     }
                     Ok(ApiKey::Fetch) => {
-                        let response = handle_fetch_request(new_buf, header.request_api_version, &topic_manager)?;
+                        let response = handle_fetch_request(buffer, header.request_api_version, &topic_manager)?;
 
                         size += response_header.compute_size(response_header_api_version).unwrap();
                         size += response.compute_size(header.request_api_version).unwrap();
