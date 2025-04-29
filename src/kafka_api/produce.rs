@@ -1,3 +1,4 @@
+use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ProduceRequest, TopicName};
@@ -39,22 +40,28 @@ pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<
     }
 }
 
-fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic_manager: &Arc<TopicManager>) {
-    let topic_name = topic_data
-        .first()
-        .unwrap()
-        .name.to_string();
+fn handle_topic_data(
+    topic_data: Vec<TopicProduceData>,
+    topic_manager: &Arc<TopicManager>,
+) -> Result<()> {
+    let first_topic = topic_data
+        .get(0)
+        .ok_or_else(|| anyhow::anyhow!("No topic data provided"))?;
 
-    let record = topic_data
-        .first()
-        .unwrap()
+    let topic_name = &first_topic.name;
+
+    let partition = first_topic
         .partition_data
-        .first()
-        .unwrap()
+        .get(0)
+        .ok_or_else(|| anyhow::anyhow!("No partition data available"))?;
+
+    let records = partition
         .records
         .clone()
-        .unwrap();
-    topic_manager.add(&topic_name, record)
+        .ok_or_else(|| anyhow::anyhow!("No records available"))?;
+
+    topic_manager.add(topic_name, records);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -71,12 +78,21 @@ mod tests {
         let topic_manager = Arc::new(TopicManager::new());
         let produce_request = create_produce_request(&topic_name, record.clone());
 
-        handle_topic_data(produce_request.topic_data, &topic_manager);
+        let _ = handle_topic_data(produce_request.topic_data, &topic_manager);
 
         let read = topic_manager.topics.read().unwrap();
         let message = read.get(topic_name).unwrap().get(0).unwrap();
 
         assert_eq!(*message, record)
+    }
+
+    #[test]
+    fn test_handle_topic_data_failure() {
+        let produce_request = ProduceRequest::default();
+        dbg!(&produce_request);
+        let topic_manager = Arc::new(TopicManager::new());
+
+        let _ = handle_topic_data(produce_request.topic_data, &topic_manager);
     }
 
     #[test]
@@ -89,13 +105,12 @@ mod tests {
 
         let mut request_buffer = BytesMut::new();
         let produce_request_api_version = 9;
-        produce_request.encode(&mut request_buffer, produce_request_api_version);
+        let _ = produce_request.encode(&mut request_buffer, produce_request_api_version);
         handle_produce_request(
             request_buffer.into(),
             produce_request_api_version,
             &topic_manager,
         );
-
 
         let read = topic_manager.topics.read().unwrap();
         let message = read.get(topic_name).unwrap().get(0).unwrap();
