@@ -5,7 +5,7 @@ use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use std::collections::VecDeque;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use crate::topic_manager::TopicManager;
 
@@ -27,7 +27,7 @@ fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     topic_to_produce_to
 }
 
-pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &mut TopicManager) {
+pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) {
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
     match produce_request {
         Ok(ProduceRequest { topic_data, .. }) => {
@@ -39,7 +39,7 @@ pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &mut 
     }
 }
 
-fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic_manager: &mut TopicManager) {
+fn handle_topic_data(topic_data: Vec<TopicProduceData>, topic_manager: &Arc<TopicManager>) {
     let topic_name = topic_data
         .first()
         .unwrap()

@@ -14,14 +14,14 @@ impl TopicManager {
         }
     }
 
-    pub fn add(&mut self, topic: &str, record: Bytes) {
+    pub fn add(&self, topic: &str, record: Bytes) {
         let mut write = self.topics.write().unwrap();
         let mut queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         queue.push_front(record);
         info!("Currently topics have {:?}", write);
     }
 
-    pub fn remove(&mut self, topic: &str) -> Bytes {
+    pub fn remove(&self, topic: &str) -> Bytes {
         let mut write = self.topics.write().unwrap();
         let mut queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();

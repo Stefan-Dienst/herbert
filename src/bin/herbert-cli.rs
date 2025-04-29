@@ -1,6 +1,8 @@
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
+use std::thread::sleep;
+use std::time::Duration;
 
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
@@ -104,28 +106,32 @@ fn main() -> std::io::Result<()> {
             let fetch_request = create_fetch_request(&topic, max_messages);
 
             let request_buffer = create_buffer(header, fetch_request);
-            stream.write(&request_buffer)?;
 
-            // Read response
-            let mut buffer = [0; 512];
-            stream.read(&mut buffer);
+            loop {
+                stream.write(&request_buffer)?;
 
-            // Decode response
-            let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
-            let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
-            dbg!(header);
+                // Read response
+                let mut buffer = [0; 512];
+                stream.read(&mut buffer);
 
-            let fetch_response = FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
-            let records = fetch_response.responses.get(0).unwrap().partitions.get(0).unwrap().records.clone().unwrap();
+                // Decode response
+                let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+                let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+                dbg!(header);
 
-            // split records
-            let raw: &[u8] = & records;
-            let parts: Vec<&[u8]> = raw.split(|b| *b == 0).collect();
-            println!("Consumed records:");
-            for part in parts {
-                println!("{:?}", std::str::from_utf8(part).unwrap());
+                let fetch_response = FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
+                let records = fetch_response.responses.get(0).unwrap().partitions.get(0).unwrap().records.clone().unwrap();
+
+                // split records
+                let raw: &[u8] = & records;
+                let parts: Vec<&[u8]> = raw.split(|b| *b == 0).collect();
+                println!("Consumed records:");
+                for part in parts {
+                    println!("{:?}", std::str::from_utf8(part).unwrap());
+                }
+                sleep(Duration::from_secs(2));
+
             }
-
             Ok(())
         }
     }

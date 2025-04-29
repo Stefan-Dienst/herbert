@@ -6,7 +6,7 @@ use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use std::collections::VecDeque;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use crate::topic_manager::{self, TopicManager};
 
@@ -23,7 +23,7 @@ pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     fetch_request
 }
 
-pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &mut TopicManager) -> FetchResponse {
+pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) -> FetchResponse {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
         Ok(FetchRequest { max_bytes, topics, .. }) => {

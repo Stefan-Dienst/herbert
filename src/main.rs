@@ -9,12 +9,14 @@ use kafka_protocol::protocol::buf::ByteBuf;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
 
+use std::sync::Arc;
+use std::thread;
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
 
-fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
+fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) {
     info!("I have received a connection!");
     let mut buffer = [0; 512];
 
@@ -32,13 +34,13 @@ fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
                 let header_version = ApiKey::try_from(api_key)
                     .unwrap()
                     .request_header_version(api_version);
-                info!("The header version: {:?}", header_version);
+                // info!("The header version: {:?}", header_version);
 
                 let header = RequestHeader::decode(&mut new_buf, header_version).unwrap();
                 let api_key = ApiKey::try_from(header.request_api_key);
 
-                info!("The api key: {:?}", api_key);
-                info!("The api version: {:?}", api_version);
+                // info!("The api key: {:?}", api_key);
+                // info!("The api version: {:?}", api_version);
 
                 let mut response_buffer = BytesMut::new();
                 let mut response_header = ResponseHeader::default();
@@ -49,10 +51,10 @@ fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
 
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        handle_produce_request(new_buf, header.request_api_version, topic_manager);
+                        handle_produce_request(new_buf, header.request_api_version, &topic_manager);
                     }
                     Ok(ApiKey::Fetch) => {
-                        let response = handle_fetch_request(new_buf, header.request_api_version, topic_manager);
+                        let response = handle_fetch_request(new_buf, header.request_api_version, &topic_manager);
 
                         size += response_header.compute_size(response_header_api_version).unwrap();
                         size += response.compute_size(header.request_api_version).unwrap();
@@ -67,7 +69,7 @@ fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
                     }
                 }
 
-                dbg!(&response_buffer);
+                // dbg!(&response_buffer);
                 stream.write(&response_buffer[..]).unwrap();
                 stream.flush().unwrap();
             }
@@ -88,12 +90,13 @@ fn main() -> std::io::Result<()> {
     info!("Starting the TCP server. Listening on {:?}", adress);
     let listener = TcpListener::bind(adress)?;
 
-    let mut topic_manager = TopicManager::new();
+    let mut topic_manager = Arc::new(TopicManager::new());
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                handle_connection(stream, &mut topic_manager);
+                let tm_clone = Arc::clone(&topic_manager);
+                thread::spawn(|| {handle_connection(stream, tm_clone)});
             }
             Err(..) => {
                 error!("Oh oh!");
