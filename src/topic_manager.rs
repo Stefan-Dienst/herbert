@@ -16,14 +16,14 @@ impl TopicManager {
 
     pub fn add(&self, topic: &str, record: Bytes) {
         let mut write = self.topics.write().unwrap();
-        let mut queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
+        let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         queue.push_front(record);
         info!("Currently topics have {:?}", write);
     }
 
     pub fn remove(&self, topic: &str) -> Bytes {
         let mut write = self.topics.write().unwrap();
-        let mut queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
+        let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
         while !queue.is_empty() {
             let message = queue.pop_back().unwrap();
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let mut topic_manager = TopicManager::new();
+        let topic_manager = TopicManager::new();
         let record = Bytes::from("test");
         topic_manager.add("foobar", record.clone());
         assert!(!topic_manager.topics.read().unwrap().get("foobar").unwrap().is_empty());
@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_remove() {
-        let mut topic_manager = TopicManager::new();
+        let topic_manager = TopicManager::new();
         let record = Bytes::from("test");
         topic_manager.add("foobar", record.clone());
         assert!(!topic_manager.topics.read().unwrap().get("foobar").unwrap().is_empty());
