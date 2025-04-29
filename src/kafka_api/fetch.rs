@@ -5,9 +5,7 @@ use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, Partition
 use kafka_protocol::messages::{FetchRequest, FetchResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use log::{error, info};
-use once_cell::sync::Lazy;
-use std::collections::VecDeque;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::topic_manager::{self, TopicManager};
 
