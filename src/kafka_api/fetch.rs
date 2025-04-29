@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request() {
-        let mut topic_manager = TopicManager::new();
+        let topic_manager = Arc::new(TopicManager::new());
         let record = Bytes::from("test");
         topic_manager.add("foobar", record.clone());
 
@@ -63,7 +63,7 @@ mod tests {
         handle_fetch_request(
             request_buffer.into(),
             fetch_request_api_version,
-            &mut topic_manager,
+            &topic_manager,
         );
         // TODO: write sensicel test so that something is actually retured.
     }

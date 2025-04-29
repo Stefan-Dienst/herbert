@@ -68,10 +68,10 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let mut topic_manager = TopicManager::new();
+        let topic_manager = Arc::new(TopicManager::new());
         let produce_request = create_produce_request(&topic_name, record.clone());
 
-        handle_topic_data(produce_request.topic_data, &mut topic_manager);
+        handle_topic_data(produce_request.topic_data, &topic_manager);
 
         let read = topic_manager.topics.read().unwrap();
         let message = read.get(topic_name).unwrap().get(0).unwrap();
@@ -84,7 +84,7 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let mut topic_manager = TopicManager::new();
+        let topic_manager = Arc::new(TopicManager::new());
         let produce_request = create_produce_request(&topic_name, record.clone());
 
         let mut request_buffer = BytesMut::new();
@@ -93,7 +93,7 @@ mod tests {
         handle_produce_request(
             request_buffer.into(),
             produce_request_api_version,
-            &mut topic_manager,
+            &topic_manager,
         );
 
 
