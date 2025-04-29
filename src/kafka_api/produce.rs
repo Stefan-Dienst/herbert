@@ -4,9 +4,7 @@ use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProdu
 use kafka_protocol::messages::{ProduceRequest, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::{error, info};
-use once_cell::sync::Lazy;
-use std::collections::VecDeque;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::topic_manager::TopicManager;
 
@@ -28,16 +26,17 @@ fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     topic_to_produce_to
 }
 
-pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) {
+pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) -> Result<()>{
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
     match produce_request {
         Ok(ProduceRequest { topic_data, .. }) => {
-            handle_topic_data(topic_data, topic_manager);
+            handle_topic_data(topic_data, topic_manager)?;
         }
         _ => {
             error!("Something wrong with the produce request.")
         }
     }
+    Ok(())
 }
 
 fn handle_topic_data(
@@ -92,7 +91,8 @@ mod tests {
         dbg!(&produce_request);
         let topic_manager = Arc::new(TopicManager::new());
 
-        let _ = handle_topic_data(produce_request.topic_data, &topic_manager);
+        let result = handle_topic_data(produce_request.topic_data, &topic_manager);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         let mut request_buffer = BytesMut::new();
         let produce_request_api_version = 9;
         let _ = produce_request.encode(&mut request_buffer, produce_request_api_version);
-        handle_produce_request(
+        let _ = handle_produce_request(
             request_buffer.into(),
             produce_request_api_version,
             &topic_manager,
@@ -117,4 +117,21 @@ mod tests {
 
         assert_eq!(*message, record)
     }
+
+    #[test]
+    fn test_handle_produce_request_failure() {
+        let produce_request = ProduceRequest::default();
+        let topic_manager = Arc::new(TopicManager::new());
+
+        let mut request_buffer = BytesMut::new();
+        let produce_request_api_version = 9;
+        let _ = produce_request.encode(&mut request_buffer, produce_request_api_version);
+        let result = handle_produce_request(
+            request_buffer.into(),
+            produce_request_api_version,
+            &topic_manager,
+        );
+        assert!(result.is_err());
+    }
+
 }
