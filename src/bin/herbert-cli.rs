@@ -6,8 +6,10 @@ use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use herbert::kafka_api::create_fetch_request;
 use herbert::kafka_api::create_produce_request;
+use kafka_protocol::messages::FetchResponse;
+use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::messages::{ApiKey, RequestHeader};
-use kafka_protocol::protocol::Encodable;
+use kafka_protocol::protocol::{Decodable, Encodable};
 
 #[derive(Parser, Debug)]
 #[command(name = "herbert--cli")]
@@ -104,9 +106,25 @@ fn main() -> std::io::Result<()> {
             let request_buffer = create_buffer(header, fetch_request);
             stream.write(&request_buffer)?;
 
+            // Read response
             let mut buffer = [0; 512];
             stream.read(&mut buffer);
-            dbg!(buffer);
+
+            // Decode response
+            let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+            let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+            dbg!(header);
+
+            let fetch_response = FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
+            let records = fetch_response.responses.get(0).unwrap().partitions.get(0).unwrap().records.clone().unwrap();
+
+            // split records
+            let raw: &[u8] = & records;
+            let parts: Vec<&[u8]> = raw.split(|b| *b == 0).collect();
+            println!("Consumed records:");
+            for part in parts {
+                println!("{:?}", std::str::from_utf8(part).unwrap());
+            }
 
             Ok(())
         }

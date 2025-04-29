@@ -28,6 +28,9 @@ impl TopicManager {
         while !queue.is_empty() {
             let message = queue.pop_back().unwrap();
             records.put(message.clone());
+            if !queue.is_empty() {
+                records.put_u8(0);
+            }
             info!("Found message {:?}", message);
         }
         records.into()
