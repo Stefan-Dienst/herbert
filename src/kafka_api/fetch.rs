@@ -1,6 +1,7 @@
 use bytes::{Buf, Bytes, BytesMut};
 use kafka_protocol::messages::fetch_request::FetchTopic;
-use kafka_protocol::messages::{FetchRequest, TopicName};
+use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
+use kafka_protocol::messages::{FetchRequest, FetchResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use log::{error, info};
 use once_cell::sync::Lazy;
@@ -22,15 +23,25 @@ pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
     fetch_request
 }
 
-pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &mut TopicManager) {
+pub fn handle_fetch_request(buf: Bytes, api_version: i16, topic_manager: &mut TopicManager) -> FetchResponse {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
         Ok(FetchRequest { max_bytes, topics, .. }) => {
             let topic_name = topics.first().unwrap().topic.to_string();
-            topic_manager.remove(&topic_name);
+            let records = topic_manager.remove(&topic_name);
+
+    let mut response = FetchResponse::default();
+    let mut topic_response = FetchableTopicResponse::default();
+    let mut partition_data = PartitionData::default();
+    partition_data.records = Some(records);
+    topic_response.partitions.push(partition_data);
+    response.responses.push(topic_response);
+    response
         }
         _ => {
-            error!("Something wrong with the fetch request.")
+            error!("Something wrong with the fetch request.");
+                panic!();
+
         }
     }
 }

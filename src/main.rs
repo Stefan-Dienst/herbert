@@ -1,4 +1,4 @@
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Buf, Bytes, BytesMut, BufMut};
 use herbert::kafka_api::handle_fetch_request;
 use herbert::kafka_api::handle_produce_request;
 use herbert::topic_manager::TopicManager;
@@ -44,6 +44,7 @@ fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
                 let mut response_header = ResponseHeader::default();
                 // Set the response correlation_id to the one of the request match them.
                 response_header.correlation_id = header.correlation_id;
+                let response_header_api_version = 1;
                 let mut size = response_header.compute_size(header_version).unwrap();
 
                 match api_key {
@@ -51,13 +52,22 @@ fn handle_connection(mut stream: TcpStream, topic_manager: &mut TopicManager) {
                         handle_produce_request(new_buf, header.request_api_version, topic_manager);
                     }
                     Ok(ApiKey::Fetch) => {
-                        handle_fetch_request(new_buf, header.request_api_version, topic_manager);
+                        let response = handle_fetch_request(new_buf, header.request_api_version, topic_manager);
+
+                        size += response_header.compute_size(response_header_api_version).unwrap();
+                        size += response.compute_size(header.request_api_version).unwrap();
+                        response_buffer.put_u32(size as u32);
+                        let _ = response_header.encode(&mut response_buffer, response_header_api_version);
+                        let _ = response.encode(&mut response_buffer, api_version);
+
+
                     }
                     _ => {
                         info!("This request of the kafka protocol is not yet covered. :(");
                     }
                 }
 
+                dbg!(&response_buffer);
                 stream.write(&response_buffer[..]).unwrap();
                 stream.flush().unwrap();
             }

@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 
@@ -102,6 +103,10 @@ fn main() -> std::io::Result<()> {
 
             let request_buffer = create_buffer(header, fetch_request);
             stream.write(&request_buffer)?;
+
+            let mut buffer = [0; 512];
+            stream.read(&mut buffer);
+            dbg!(buffer);
 
             Ok(())
         }

@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use log::info;
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
@@ -21,13 +21,16 @@ impl TopicManager {
         info!("Currently topics have {:?}", write);
     }
 
-    pub fn remove(&mut self, topic: &str) {
+    pub fn remove(&mut self, topic: &str) -> Bytes {
         let mut write = self.topics.write().unwrap();
         let mut queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
+        let mut records = BytesMut::new();
         while !queue.is_empty() {
             let message = queue.pop_back().unwrap();
+            records.put(message.clone());
             info!("Found message {:?}", message);
         }
+        records.into()
     }
 }
 
