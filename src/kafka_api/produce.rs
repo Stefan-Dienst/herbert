@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bytes::{Bytes, BytesMut};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-use kafka_protocol::messages::{ProduceRequest, TopicName};
+use kafka_protocol::messages::{ProduceRequest, ProduceResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::{error, info};
 use std::sync::Arc;
@@ -26,7 +26,7 @@ fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     topic_to_produce_to
 }
 
-pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) -> Result<()>{
+pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) -> Result<ProduceResponse>{
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
     match produce_request {
         Ok(ProduceRequest { topic_data, .. }) => {
@@ -36,7 +36,7 @@ pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<
             error!("Something wrong with the produce request.")
         }
     }
-    Ok(())
+    Ok(ProduceResponse::default())
 }
 
 fn handle_topic_data(
