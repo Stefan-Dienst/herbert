@@ -119,18 +119,28 @@ fn main() -> std::io::Result<()> {
                 let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
                 dbg!(header);
 
-                let fetch_response = FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
-                let records = fetch_response.responses.get(0).unwrap().partitions.get(0).unwrap().records.clone().unwrap();
+                let fetch_response =
+                    FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version)
+                        .unwrap();
+                let records = fetch_response
+                    .responses
+                    .get(0)
+                    .unwrap()
+                    .partitions
+                    .get(0)
+                    .unwrap()
+                    .records
+                    .clone()
+                    .unwrap();
 
                 // split records
-                let raw: &[u8] = & records;
+                let raw: &[u8] = &records;
                 let parts: Vec<&[u8]> = raw.split(|b| *b == 0).collect();
                 println!("Consumed records:");
                 for part in parts {
                     println!("{:?}", std::str::from_utf8(part).unwrap());
                 }
                 sleep(Duration::from_secs(2));
-
             }
             Ok(())
         }

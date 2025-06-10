@@ -1,7 +1,8 @@
 use anyhow::Context;
+use anyhow::Result;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
-use bytes::{Buf, Bytes, BytesMut, BufMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use herbert::kafka_api::handle_fetch_request;
 use herbert::kafka_api::handle_produce_request;
 use herbert::topic_manager::TopicManager;
@@ -11,7 +12,6 @@ use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::protocol::buf::ByteBuf;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
-use anyhow::Result;
 
 use std::sync::Arc;
 use std::thread;
@@ -20,18 +20,18 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-
-
-
 fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
-        let mut len_buf = [0u8; 4];
-        stream.read_exact(&mut len_buf).context("Failed to read message length")?;
-        let msg_len = (&len_buf[..]).read_u32::<BigEndian>().context("Failed to parse message length")? as usize;
-        Ok(msg_len)
+    let mut len_buf = [0u8; 4];
+    stream
+        .read_exact(&mut len_buf)
+        .context("Failed to read message length")?;
+    let msg_len = (&len_buf[..])
+        .read_u32::<BigEndian>()
+        .context("Failed to parse message length")? as usize;
+    Ok(msg_len)
 }
 
-
-fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->  Result<()> {
+fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) -> Result<()> {
     info!("I have received a connection!");
 
     loop {
@@ -63,22 +63,31 @@ fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->
                 let mut size = response_header.compute_size(header_version).unwrap();
 
                 //TODO: Wrap response in an enum, and implement ecode trait for it so that I can
-                //treat all response the same. This is needed as encode is not object safe to I
+                //treat all response the same. This is needed as encode is not object safe to g
                 //can't use Box(dyn)...
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        let response = handle_produce_request(buffer, header.request_api_version, &topic_manager)?;
+                        let response = handle_produce_request(
+                            buffer,
+                            header.request_api_version,
+                            &topic_manager,
+                        )?;
                     }
                     Ok(ApiKey::Fetch) => {
-                        let response = handle_fetch_request(buffer, header.request_api_version, &topic_manager)?;
+                        let response = handle_fetch_request(
+                            buffer,
+                            header.request_api_version,
+                            &topic_manager,
+                        )?;
 
-                        size += response_header.compute_size(response_header_api_version).unwrap();
+                        size += response_header
+                            .compute_size(response_header_api_version)
+                            .unwrap();
                         size += response.compute_size(header.request_api_version).unwrap();
                         response_buffer.put_u32(size as u32);
-                        let _ = response_header.encode(&mut response_buffer, response_header_api_version);
+                        let _ = response_header
+                            .encode(&mut response_buffer, response_header_api_version);
                         let _ = response.encode(&mut response_buffer, api_version);
-
-
                     }
                     _ => {
                         info!("This request of the kafka protocol is not yet covered. :(");
@@ -113,7 +122,7 @@ fn main() -> std::io::Result<()> {
         match stream {
             Ok(stream) => {
                 let tm_clone = Arc::clone(&topic_manager);
-                thread::spawn(|| {handle_connection(stream, tm_clone)});
+                thread::spawn(|| handle_connection(stream, tm_clone));
             }
             Err(..) => {
                 error!("Oh oh!");

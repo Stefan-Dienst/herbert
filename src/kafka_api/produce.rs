@@ -26,7 +26,11 @@ fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     topic_to_produce_to
 }
 
-pub fn handle_produce_request(buf: Bytes, api_version: i16, topic_manager: &Arc<TopicManager>) -> Result<ProduceResponse>{
+pub fn handle_produce_request(
+    buf: Bytes,
+    api_version: i16,
+    topic_manager: &Arc<TopicManager>,
+) -> Result<ProduceResponse> {
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
     match produce_request {
         Ok(ProduceRequest { topic_data, .. }) => {
@@ -133,5 +137,4 @@ mod tests {
         );
         assert!(result.is_err());
     }
-
 }
