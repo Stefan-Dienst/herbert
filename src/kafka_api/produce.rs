@@ -69,7 +69,7 @@ fn handle_topic_data(
 
 #[cfg(test)]
 mod tests {
-    use kafka_protocol::protocol::Encodable;
+    use kafka_protocol::{messages, protocol::Encodable};
 
     use super::*;
 
@@ -78,22 +78,21 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let topic_manager = Arc::new(TopicManager::new());
+        let topic_manager = Arc::new(TopicManager::default());
         let produce_request = create_produce_request(&topic_name, record.clone());
 
         let _ = handle_topic_data(produce_request.topic_data, &topic_manager);
 
-        let read = topic_manager.topics.read().unwrap();
-        let message = read.get(topic_name).unwrap().get(0).unwrap();
+        let message = topic_manager.fetch(topic_name);
 
-        assert_eq!(*message, record)
+        assert_eq!(*message.unwrap(), record)
     }
 
     #[test]
     fn test_handle_topic_data_failure() {
         let produce_request = ProduceRequest::default();
         dbg!(&produce_request);
-        let topic_manager = Arc::new(TopicManager::new());
+        let topic_manager = Arc::new(TopicManager::default());
 
         let result = handle_topic_data(produce_request.topic_data, &topic_manager);
         assert!(result.is_err());
@@ -104,7 +103,7 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let topic_manager = Arc::new(TopicManager::new());
+        let topic_manager = Arc::new(TopicManager::default());
         let produce_request = create_produce_request(&topic_name, record.clone());
 
         let mut request_buffer = BytesMut::new();
@@ -116,16 +115,15 @@ mod tests {
             &topic_manager,
         );
 
-        let read = topic_manager.topics.read().unwrap();
-        let message = read.get(topic_name).unwrap().get(0).unwrap();
+        let message = topic_manager.fetch(topic_name);
 
-        assert_eq!(*message, record)
+        assert_eq!(*message.unwrap(), record)
     }
 
     #[test]
     fn test_handle_produce_request_failure() {
         let produce_request = ProduceRequest::default();
-        let topic_manager = Arc::new(TopicManager::new());
+        let topic_manager = Arc::new(TopicManager::default());
 
         let mut request_buffer = BytesMut::new();
         let produce_request_api_version = 9;

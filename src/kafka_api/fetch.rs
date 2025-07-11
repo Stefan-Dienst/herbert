@@ -36,7 +36,7 @@ pub fn handle_fetch_request(
                 .get(0)
                 .ok_or_else(|| anyhow::anyhow!("No Topic data available in fetch request"))?;
             let topic_name = first_topic.topic.to_string();
-            let records = topic_manager.remove(&topic_name)?;
+            let records = topic_manager.fetch(&topic_name)?;
 
             let mut response = FetchResponse::default();
             let mut topic_response = FetchableTopicResponse::default();
@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request() {
-        let topic_manager = Arc::new(TopicManager::new());
+        let topic_manager = Arc::new(TopicManager::default());
         let record = Bytes::from("test");
         topic_manager.add("foobar", record.clone());
 

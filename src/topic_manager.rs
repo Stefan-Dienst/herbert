@@ -2,20 +2,27 @@ use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use log::info;
 use std::collections::{HashMap, VecDeque};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
-pub struct TopicManager {
-    pub topics: RwLock<HashMap<String, VecDeque<Bytes>>>,
+pub trait RecordStorage: Send + Sync {
+    fn add(&self, topic: &str, records: Bytes) -> Result<()>;
+    fn fetch(&self, topic: &str) -> Result<Bytes>;
 }
 
-impl TopicManager {
+pub struct InMemoryQueue {
+    topics: RwLock<HashMap<String, VecDeque<Bytes>>>,
+}
+
+impl InMemoryQueue {
     pub fn new() -> Self {
-        TopicManager {
+        Self {
             topics: RwLock::new(HashMap::new()),
         }
     }
+}
 
-    pub fn add(&self, topic: &str, record: Bytes) -> Result<()> {
+impl RecordStorage for InMemoryQueue {
+    fn add(&self, topic: &str, record: Bytes) -> Result<()> {
         let mut write = self
             .topics
             .write()
@@ -26,7 +33,7 @@ impl TopicManager {
         Ok(())
     }
 
-    pub fn remove(&self, topic: &str) -> Result<Bytes> {
+    fn fetch(&self, topic: &str) -> Result<Bytes> {
         let mut write = self
             .topics
             .write()
@@ -47,22 +54,47 @@ impl TopicManager {
     }
 }
 
+pub struct TopicManager {
+    backend: Arc<dyn RecordStorage>,
+}
+
+impl TopicManager {
+    pub fn new(backend: Arc<dyn RecordStorage>) -> Self {
+        TopicManager { backend: backend }
+    }
+
+    pub fn add(&self, topic: &str, record: Bytes) -> Result<()> {
+        self.backend.add(topic, record)
+    }
+
+    pub fn fetch(&self, topic: &str) -> Result<Bytes> {
+        self.backend.fetch(topic)
+    }
+}
+
+impl Default for TopicManager {
+    fn default() -> Self {
+        let backend = Arc::new(InMemoryQueue::new());
+        TopicManager { backend }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_new() {
-        let topic_manager = TopicManager::new();
-        assert!(topic_manager.topics.read().unwrap().is_empty())
+        let in_memory_queue = InMemoryQueue::new();
+        assert!(in_memory_queue.topics.read().unwrap().is_empty())
     }
 
     #[test]
     fn test_add() {
-        let topic_manager = TopicManager::new();
+        let in_memory_queue = InMemoryQueue::new();
         let record = Bytes::from("test");
-        topic_manager.add("foobar", record.clone());
-        assert!(!topic_manager
+        in_memory_queue.add("foobar", record.clone());
+        assert!(!in_memory_queue
             .topics
             .read()
             .unwrap()
@@ -70,7 +102,7 @@ mod tests {
             .unwrap()
             .is_empty());
         assert_eq!(
-            *topic_manager
+            *in_memory_queue
                 .topics
                 .read()
                 .unwrap()
@@ -84,10 +116,10 @@ mod tests {
 
     #[test]
     fn test_remove() {
-        let topic_manager = TopicManager::new();
+        let in_memory_queue = InMemoryQueue::new();
         let record = Bytes::from("test");
-        topic_manager.add("foobar", record.clone());
-        assert!(!topic_manager
+        in_memory_queue.add("foobar", record.clone());
+        assert!(!in_memory_queue
             .topics
             .read()
             .unwrap()
@@ -95,7 +127,7 @@ mod tests {
             .unwrap()
             .is_empty());
         assert_eq!(
-            *topic_manager
+            *in_memory_queue
                 .topics
                 .read()
                 .unwrap()
@@ -106,8 +138,8 @@ mod tests {
             record
         );
 
-        topic_manager.remove("foobar");
-        assert!(topic_manager
+        in_memory_queue.fetch("foobar");
+        assert!(in_memory_queue
             .topics
             .read()
             .unwrap()
