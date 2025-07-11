@@ -46,7 +46,7 @@ pub fn produce(broker: String, topic: String, message: String) -> Result<()> {
     Ok(())
 }
 
-pub fn consume(broker: String, topic: String, max_messages: i32) -> Result<()> {
+pub fn consume_continuos(broker: String, topic: String, max_messages: i32) -> Result<()> {
     let mut stream = TcpStream::connect(broker)?;
     let fetch_request_api_version = 1;
 
@@ -56,38 +56,56 @@ pub fn consume(broker: String, topic: String, max_messages: i32) -> Result<()> {
     let request_buffer = create_buffer(header, fetch_request);
 
     loop {
-        stream.write(&request_buffer)?;
-
-        // Read response
-        let mut buffer = [0; 512];
-        stream.read(&mut buffer);
-
-        // Decode response
-        let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
-        let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
-        dbg!(header);
-
-        let fetch_response =
-            FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
-        let records = fetch_response
-            .responses
-            .get(0)
-            .unwrap()
-            .partitions
-            .get(0)
-            .unwrap()
-            .records
-            .clone()
-            .unwrap();
-
-        // split records
-        let raw: &[u8] = &records;
-        let parts: Vec<&[u8]> = raw.split(|b| *b == 0).collect();
         println!("Consumed records:");
-        for part in parts {
-            println!("{:?}", std::str::from_utf8(part).unwrap());
+        let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
+        for record in records {
+            println!("{:?}", std::str::from_utf8(&record).unwrap());
         }
         sleep(Duration::from_secs(2));
     }
-    Ok(())
+}
+
+pub fn consume(broker: String, topic: String, max_messages: i32) -> Result<Vec<Vec<u8>>> {
+    let mut stream = TcpStream::connect(broker)?;
+    let fetch_request_api_version = 1;
+
+    let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
+    let fetch_request = create_fetch_request(&topic, max_messages);
+
+    let request_buffer = create_buffer(header, fetch_request);
+
+    get_records(&mut stream, &request_buffer, fetch_request_api_version)
+}
+
+fn get_records(
+    stream: &mut TcpStream,
+    request_buffer: &BytesMut,
+    fetch_request_api_version: i16,
+) -> Result<Vec<Vec<u8>>> {
+    stream.write(&request_buffer)?;
+
+    // Read response
+    let mut buffer = [0; 512];
+    stream.read(&mut buffer);
+
+    // Decode response
+    let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+    let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+
+    let fetch_response =
+        FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
+    let records = fetch_response
+        .responses
+        .get(0)
+        .unwrap()
+        .partitions
+        .get(0)
+        .unwrap()
+        .records
+        .clone()
+        .unwrap();
+
+    // split records
+    let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
+    Ok(parts)
 }

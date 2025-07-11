@@ -8,6 +8,7 @@ use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use herbert::client::consume;
+use herbert::client::consume_continuos;
 use herbert::kafka_api::create_fetch_request;
 use herbert::kafka_api::create_produce_request;
 use kafka_protocol::messages::FetchResponse;
@@ -72,6 +73,6 @@ fn main() -> Result<()> {
             broker,
             topic,
             max_messages,
-        } => consume(broker, topic, max_messages),
+        } => consume_continuos(broker, topic, max_messages),
     }
 }
