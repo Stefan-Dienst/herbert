@@ -32,12 +32,12 @@ fn create_buffer(header: RequestHeader, request: impl Encodable) -> BytesMut {
     request_buffer
 }
 
-pub fn produce(broker: String, topic: String, message: String) -> Result<()> {
+pub fn produce(broker: &str, topic: &str, message: &str) -> Result<()> {
     let mut stream = TcpStream::connect(broker)?;
     let produce_request_api_version = 9;
 
     let header = create_request_header(ApiKey::Produce as i16, produce_request_api_version);
-    let record = Bytes::from(message);
+    let record = Bytes::from(message.to_string());
     let produce_request = create_produce_request(&topic, record);
 
     let request_buffer = create_buffer(header, produce_request);
@@ -65,7 +65,7 @@ pub fn consume_continuos(broker: String, topic: String, max_messages: i32) -> Re
     }
 }
 
-pub fn consume(broker: String, topic: String, max_messages: i32) -> Result<Vec<Vec<u8>>> {
+pub fn consume(broker: &str, topic: &str, max_messages: i32) -> Result<Vec<Vec<u8>>> {
     let mut stream = TcpStream::connect(broker)?;
     let fetch_request_api_version = 1;
 
