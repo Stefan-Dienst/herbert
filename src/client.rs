@@ -46,7 +46,7 @@ pub fn produce(broker: &str, topic: &str, message: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn consume_continuos(broker: String, topic: String, max_messages: i32) -> Result<()> {
+pub fn consume_continuos(broker: &str, topic: &str, max_messages: i32) -> Result<()> {
     let mut stream = TcpStream::connect(broker)?;
     let fetch_request_api_version = 1;
 
