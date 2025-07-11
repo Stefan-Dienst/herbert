@@ -1,5 +1,6 @@
 use crate::kafka_api::handle_fetch_request;
 use crate::kafka_api::handle_produce_request;
+use crate::storage::log::Log;
 use crate::topic_manager::TopicManager;
 use anyhow::Context;
 use anyhow::Result;
@@ -115,7 +116,9 @@ pub fn run() -> std::io::Result<()> {
     info!("Starting the TCP server. Listening on {:?}", adress);
     let listener = TcpListener::bind(adress)?;
 
-    let mut topic_manager = Arc::new(TopicManager::default());
+    let backend = Arc::new(Log::new());
+    // let mut topic_manager = Arc::new(TopicManager::default());
+    let mut topic_manager = Arc::new(TopicManager::new(backend));
 
     for stream in listener.incoming() {
         match stream {
