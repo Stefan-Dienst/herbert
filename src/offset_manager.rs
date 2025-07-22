@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::{collections::HashMap, sync::RwLock};
 
-struct OffsetManager {
-    offsets: RwLock<HashMap<(String, String), i64>>,
+pub struct OffsetManager {
+    pub offsets: RwLock<HashMap<(String, String), i64>>,
 }
 
 impl OffsetManager {

@@ -1,5 +1,7 @@
 use crate::kafka_api::handle_fetch_request;
+use crate::kafka_api::handle_offset_commit_request;
 use crate::kafka_api::handle_produce_request;
+use crate::offset_manager::OffsetManager;
 use crate::storage::in_memory_log::InMemoryLog;
 use crate::topic_manager::TopicManager;
 use anyhow::Context;
@@ -32,7 +34,11 @@ fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
     Ok(msg_len)
 }
 
-fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) -> Result<()> {
+fn handle_connection(
+    mut stream: TcpStream,
+    topic_manager: Arc<TopicManager>,
+    offset_manager: Arc<OffsetManager>,
+) -> Result<()> {
     info!("I have received a connection!");
 
     loop {
@@ -72,6 +78,13 @@ fn handle_connection(mut stream: TcpStream, topic_manager: Arc<TopicManager>) ->
                             buffer,
                             header.request_api_version,
                             &topic_manager,
+                        )?;
+                    }
+                    Ok(ApiKey::OffsetCommit) => {
+                        let response = handle_offset_commit_request(
+                            buffer,
+                            header.request_api_version,
+                            &offset_manager,
                         )?;
                     }
                     Ok(ApiKey::Fetch) => {
@@ -119,12 +132,14 @@ pub fn run() -> std::io::Result<()> {
     let backend = Arc::new(InMemoryLog::new());
     // let mut topic_manager = Arc::new(TopicManager::default());
     let mut topic_manager = Arc::new(TopicManager::new(backend));
+    let mut offset_manager = Arc::new(OffsetManager::new());
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let tm_clone = Arc::clone(&topic_manager);
-                thread::spawn(|| handle_connection(stream, tm_clone));
+                let om_clone = Arc::clone(&offset_manager);
+                thread::spawn(|| handle_connection(stream, tm_clone, om_clone));
             }
             Err(..) => {
                 error!("Oh oh!");
