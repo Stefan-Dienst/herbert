@@ -25,7 +25,7 @@ impl RecordStorage for InMemoryLog {
             .write()
             .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
-        queue.push_front(record);
+        queue.push_back(record);
         info!("Currently topics have {:?}", write);
         Ok(())
     }
@@ -38,7 +38,7 @@ impl RecordStorage for InMemoryLog {
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
 
-        let mut iter = queue.iter().peekable();
+        let mut iter = queue.iter().skip(fetch_offset as usize).peekable();
 
         while let Some(record) = iter.next() {
             records.put(record.clone());
@@ -110,5 +110,23 @@ mod tests {
         assert_eq!(parts.len(), 2);
         assert_eq!(parts.get(0).unwrap(), &record);
         assert_eq!(parts.get(1).unwrap(), &record);
+    }
+
+    #[test]
+    fn test_fetch_with_offset() {
+        let in_memory_log = InMemoryLog::new();
+        let topic_name = "foobar";
+        for idx in 0..5 {
+            in_memory_log.add(&topic_name, Bytes::from(idx.to_string()));
+        }
+        let fetched_records = in_memory_log.fetch(&topic_name, 2).unwrap();
+        let parts: Vec<Bytes> = fetched_records
+            .split(|b| *b == 0)
+            .map(Bytes::copy_from_slice)
+            .collect();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts.get(0).unwrap(), &Bytes::from("2"));
+        assert_eq!(parts.get(1).unwrap(), &Bytes::from("3"));
+        assert_eq!(parts.get(2).unwrap(), &Bytes::from("4"));
     }
 }
