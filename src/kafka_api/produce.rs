@@ -83,7 +83,7 @@ mod tests {
 
         let _ = handle_topic_data(produce_request.topic_data, &topic_manager);
 
-        let message = topic_manager.fetch(topic_name);
+        let message = topic_manager.fetch(topic_name, 0);
 
         assert_eq!(*message.unwrap(), record)
     }
@@ -115,7 +115,7 @@ mod tests {
             &topic_manager,
         );
 
-        let message = topic_manager.fetch(topic_name);
+        let message = topic_manager.fetch(topic_name, 0);
 
         assert_eq!(*message.unwrap(), record)
     }

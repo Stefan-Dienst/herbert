@@ -30,7 +30,7 @@ impl RecordStorage for InMemoryQueue {
         Ok(())
     }
 
-    fn fetch(&self, topic: &str) -> Result<Bytes> {
+    fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
         let mut write = self
             .topics
             .write()
@@ -110,7 +110,7 @@ mod tests {
             record
         );
 
-        in_memory_queue.fetch("foobar");
+        in_memory_queue.fetch("foobar", 0);
         assert!(in_memory_queue
             .topics
             .read()

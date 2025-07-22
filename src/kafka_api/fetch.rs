@@ -32,11 +32,17 @@ pub fn handle_fetch_request(
         Ok(FetchRequest {
             max_bytes, topics, ..
         }) => {
+            // NOTE: Right now we always only assume one topic with one partition.
             let first_topic = topics
                 .get(0)
                 .ok_or_else(|| anyhow::anyhow!("No Topic data available in fetch request"))?;
             let topic_name = first_topic.topic.to_string();
-            let records = topic_manager.fetch(&topic_name)?;
+            let first_partition = first_topic
+                .partitions
+                .get(0)
+                .ok_or_else(|| anyhow::anyhow!("No partition data available in fetch request"))?;
+            let fetch_offset = first_partition.fetch_offset;
+            let records = topic_manager.fetch(&topic_name, fetch_offset)?;
 
             let mut response = FetchResponse::default();
             let mut topic_response = FetchableTopicResponse::default();

@@ -17,8 +17,8 @@ impl TopicManager {
         self.backend.add(topic, record)
     }
 
-    pub fn fetch(&self, topic: &str) -> Result<Bytes> {
-        self.backend.fetch(topic)
+    pub fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
+        self.backend.fetch(topic, fetch_offset)
     }
 }
 

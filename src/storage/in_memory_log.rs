@@ -30,7 +30,7 @@ impl RecordStorage for InMemoryLog {
         Ok(())
     }
 
-    fn fetch(&self, topic: &str) -> Result<Bytes> {
+    fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
         let mut write = self
             .topics
             .write()
@@ -91,7 +91,7 @@ mod tests {
         let topic_name = "foobar";
         let record = Bytes::from("test");
         in_memory_log.add(&topic_name, record.clone());
-        let fetched_record = in_memory_log.fetch(&topic_name);
+        let fetched_record = in_memory_log.fetch(&topic_name, 0);
         assert_eq!(fetched_record.unwrap(), record)
     }
 
@@ -102,7 +102,7 @@ mod tests {
         let record = Bytes::from("test");
         in_memory_log.add(&topic_name, record.clone());
         in_memory_log.add(&topic_name, record.clone());
-        let fetched_records = in_memory_log.fetch(&topic_name).unwrap();
+        let fetched_records = in_memory_log.fetch(&topic_name, 0).unwrap();
         let parts: Vec<Bytes> = fetched_records
             .split(|b| *b == 0)
             .map(Bytes::copy_from_slice)
