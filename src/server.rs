@@ -1,5 +1,6 @@
 use crate::kafka_api::handle_fetch_request;
 use crate::kafka_api::handle_offset_commit_request;
+use crate::kafka_api::handle_offset_fetch_request;
 use crate::kafka_api::handle_produce_request;
 use crate::offset_manager::OffsetManager;
 use crate::storage::in_memory_log::InMemoryLog;
@@ -92,6 +93,22 @@ fn handle_connection(
                             buffer,
                             header.request_api_version,
                             &topic_manager,
+                        )?;
+
+                        size += response_header
+                            .compute_size(response_header_api_version)
+                            .unwrap();
+                        size += response.compute_size(header.request_api_version).unwrap();
+                        response_buffer.put_u32(size as u32);
+                        let _ = response_header
+                            .encode(&mut response_buffer, response_header_api_version);
+                        let _ = response.encode(&mut response_buffer, api_version);
+                    }
+                    Ok(ApiKey::OffsetFetch) => {
+                        let response = handle_offset_fetch_request(
+                            buffer,
+                            header.request_api_version,
+                            &offset_manager,
                         )?;
 
                         size += response_header
