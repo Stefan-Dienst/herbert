@@ -51,7 +51,7 @@ pub fn consume_continuos(broker: &str, topic: &str, max_messages: i32) -> Result
     let fetch_request_api_version = 1;
 
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
-    let fetch_request = create_fetch_request(&topic, max_messages);
+    let fetch_request = create_fetch_request(&topic, max_messages, 0);
 
     let request_buffer = create_buffer(header, fetch_request);
 
@@ -70,7 +70,7 @@ pub fn consume(broker: &str, topic: &str, max_messages: i32) -> Result<Vec<Vec<u
     let fetch_request_api_version = 1;
 
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
-    let fetch_request = create_fetch_request(&topic, max_messages);
+    let fetch_request = create_fetch_request(&topic, max_messages, 0);
 
     let request_buffer = create_buffer(header, fetch_request);
 

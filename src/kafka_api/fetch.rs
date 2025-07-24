@@ -1,6 +1,6 @@
 use anyhow::Result;
 use bytes::{Buf, Bytes, BytesMut};
-use kafka_protocol::messages::fetch_request::FetchTopic;
+use kafka_protocol::messages::fetch_request::{FetchPartition, FetchTopic};
 use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
 use kafka_protocol::messages::{FetchRequest, FetchResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::topic_manager::{self, TopicManager};
 
-pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
+pub fn create_fetch_request(topic: &str, max_messages: i32, fetch_offset: i64) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
 
     // FIXME: Max bytes does not work. Herbet can't decode it somehow.
@@ -17,6 +17,9 @@ pub fn create_fetch_request(topic: &str, max_messages: i32) -> FetchRequest {
 
     let mut fetch_topic = FetchTopic::default();
     fetch_topic.topic = TopicName::from(StrBytes::from_string(topic.to_string()));
+    let mut fetch_partition = FetchPartition::default();
+    fetch_partition.fetch_offset = fetch_offset;
+    fetch_topic.partitions.push(fetch_partition);
 
     fetch_request.topics.push(fetch_topic);
     fetch_request
@@ -61,6 +64,8 @@ pub fn handle_fetch_request(
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::in_memory_log::InMemoryLog;
+
     use super::*;
 
     #[test]
@@ -69,7 +74,7 @@ mod tests {
         let record = Bytes::from("test");
         topic_manager.add("foobar", record.clone());
 
-        let fetch_request = create_fetch_request("foobar", 3);
+        let fetch_request = create_fetch_request("foobar", 3, 0);
         let mut request_buffer = BytesMut::new();
         let fetch_request_api_version = 9;
         let _ = fetch_request.encode(&mut request_buffer, fetch_request_api_version);
@@ -89,5 +94,34 @@ mod tests {
             .records
             .clone();
         assert_eq!(record, Some(Bytes::from("test")))
+    }
+
+    #[test]
+    fn test_handle_fetch_request_with_offset() {
+        let topic_manager = Arc::new(TopicManager::new(Arc::new(InMemoryLog::new())));
+        for ele in 0..5 {
+            topic_manager.add("foobar", Bytes::from(ele.to_string()));
+        }
+
+        let fetch_request = create_fetch_request("foobar", 3, 3);
+        let mut request_buffer = BytesMut::new();
+        let fetch_request_api_version = 9;
+        let _ = fetch_request.encode(&mut request_buffer, fetch_request_api_version);
+        let response = handle_fetch_request(
+            request_buffer.into(),
+            fetch_request_api_version,
+            &topic_manager,
+        );
+        let record = response
+            .unwrap()
+            .responses
+            .get(0)
+            .unwrap()
+            .partitions
+            .get(0)
+            .unwrap()
+            .records
+            .clone();
+        assert_eq!(record, Some(Bytes::from("3\04")))
     }
 }
