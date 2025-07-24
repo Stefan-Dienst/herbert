@@ -13,18 +13,16 @@ impl OffsetManager {
     }
 
     pub fn get_offset(&self, consumer_group: &str, topic: &str) -> Result<i64> {
-        self.offsets
+        let offsets = self
+            .offsets
             .read()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?
+            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+
+        let offset = offsets
             .get(&(consumer_group.to_string(), topic.to_string()))
             .copied()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Offset not found for consumer group '{}' and topic '{}'",
-                    consumer_group,
-                    topic
-                )
-            })
+            .unwrap_or(0);
+        Ok(offset)
     }
 
     pub fn set_offset(&self, consumer_group: &str, topic: &str, offset: i64) -> Result<()> {
@@ -66,6 +64,14 @@ mod tests {
         let offset_manager = OffsetManager::new();
         let offset = 10;
         offset_manager.set_offset("test", "foobar", offset);
+        let got_offset = offset_manager.get_offset("test", "foobar");
+        assert_eq!(offset, got_offset.unwrap())
+    }
+
+    #[test]
+    fn test_get_offset_for_new_consumer_group() {
+        let offset_manager = OffsetManager::new();
+        let offset = 0;
         let got_offset = offset_manager.get_offset("test", "foobar");
         assert_eq!(offset, got_offset.unwrap())
     }
