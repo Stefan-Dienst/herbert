@@ -78,12 +78,12 @@ mod tests {
 
         let offset_fetch_request = create_offset_fetch_request(consumer_group, topic);
         let mut request_buffer = BytesMut::new();
-        let fetch_request_api_version = 6;
-        let _ = offset_fetch_request.encode(&mut request_buffer, fetch_request_api_version);
+        let offset_fetch_request_api_version = 6;
+        let _ = offset_fetch_request.encode(&mut request_buffer, offset_fetch_request_api_version);
         dbg!(offset_fetch_request);
         let response = handle_offset_fetch_request(
             request_buffer.into(),
-            fetch_request_api_version,
+            offset_fetch_request_api_version,
             &offset_manager,
         );
         let got_offset = response
