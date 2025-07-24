@@ -40,6 +40,5 @@ fn test_publishing_and_consuming_message() {
 
     sleep(Duration::from_secs(1));
     let records = consume(broker, topic, 1);
-    dbg!(&records);
     assert!(records.unwrap() == vec!["ok".as_bytes()]);
 }

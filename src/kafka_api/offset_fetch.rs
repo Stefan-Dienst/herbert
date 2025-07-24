@@ -34,7 +34,6 @@ pub fn handle_offset_fetch_request(
     offset_manager: &Arc<OffsetManager>,
 ) -> Result<OffsetFetchResponse> {
     let offset_fetch_request = OffsetFetchRequest::decode(&mut Bytes::from(buf), api_version);
-    dbg!(&offset_fetch_request);
     match offset_fetch_request {
         Ok(OffsetFetchRequest {
             group_id, topics, ..
@@ -80,7 +79,6 @@ mod tests {
         let mut request_buffer = BytesMut::new();
         let offset_fetch_request_api_version = 6;
         let _ = offset_fetch_request.encode(&mut request_buffer, offset_fetch_request_api_version);
-        dbg!(offset_fetch_request);
         let response = handle_offset_fetch_request(
             request_buffer.into(),
             offset_fetch_request_api_version,

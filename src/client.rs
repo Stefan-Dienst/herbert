@@ -5,11 +5,15 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use crate::kafka_api::create_fetch_request;
+use crate::kafka_api::create_offset_commit_request;
+use crate::kafka_api::create_offset_fetch_request;
 use crate::kafka_api::create_produce_request;
 use anyhow::Result;
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use kafka_protocol::messages::FetchResponse;
+use kafka_protocol::messages::OffsetCommitResponse;
+use kafka_protocol::messages::OffsetFetchResponse;
 use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::messages::{ApiKey, RequestHeader};
 use kafka_protocol::protocol::{Decodable, Encodable};
@@ -21,7 +25,7 @@ fn create_request_header(request_api_key: i16, request_api_version: i16) -> Requ
     header
 }
 
-fn create_buffer(header: RequestHeader, request: impl Encodable) -> BytesMut {
+fn create_buffer(header: &RequestHeader, request: impl Encodable) -> BytesMut {
     let mut size = header.compute_size(header.request_api_version).unwrap();
     size += request.compute_size(header.request_api_version).unwrap();
 
@@ -40,27 +44,36 @@ pub fn produce(broker: &str, topic: &str, message: &str) -> Result<()> {
     let record = Bytes::from(message.to_string());
     let produce_request = create_produce_request(&topic, record);
 
-    let request_buffer = create_buffer(header, produce_request);
+    let request_buffer = create_buffer(&header, produce_request);
     stream.write(&request_buffer)?;
 
     Ok(())
 }
 
-pub fn consume_continuos(broker: &str, topic: &str, max_messages: i32) -> Result<()> {
+pub fn consume_continuos(
+    broker: &str,
+    topic: &str,
+    max_messages: i32,
+    consumer_group: &str,
+) -> Result<()> {
     let mut stream = TcpStream::connect(broker)?;
+
+    let initial_offset = get_offset(&mut stream, consumer_group, topic)?;
+
     let fetch_request_api_version = 1;
-
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
-    let fetch_request = create_fetch_request(&topic, max_messages, 0);
 
-    let request_buffer = create_buffer(header, fetch_request);
-
+    let mut offset = initial_offset;
     loop {
+        let fetch_request = create_fetch_request(&topic, max_messages, offset);
+        let request_buffer = create_buffer(&header, fetch_request);
         println!("Consumed records:");
         let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
-        for record in records {
+        for record in &records {
             println!("{:?}", std::str::from_utf8(&record).unwrap());
         }
+        offset += records.len() as i64;
+        set_offset(&mut stream, consumer_group, topic, offset);
         sleep(Duration::from_secs(2));
     }
 }
@@ -72,9 +85,39 @@ pub fn consume(broker: &str, topic: &str, max_messages: i32) -> Result<Vec<Vec<u
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
     let fetch_request = create_fetch_request(&topic, max_messages, 0);
 
-    let request_buffer = create_buffer(header, fetch_request);
+    let request_buffer = create_buffer(&header, fetch_request);
 
     get_records(&mut stream, &request_buffer, fetch_request_api_version)
+}
+
+fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Result<i64> {
+    let offset_fetch_request_api_version = 6;
+    let offset_fetch_header =
+        create_request_header(ApiKey::OffsetFetch as i16, offset_fetch_request_api_version);
+    let offset_fetch_request = create_offset_fetch_request(consumer_group, topic);
+    let offset_fetch_request_buffer = create_buffer(&offset_fetch_header, offset_fetch_request);
+
+    stream.write(&offset_fetch_request_buffer)?;
+    // Read response
+    let mut buffer = [0; 512];
+    stream.read(&mut buffer);
+    // Decode response
+    let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+    let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+
+    let offset_fetch_response =
+        OffsetFetchResponse::decode(&mut Bytes::from(new_buf), offset_fetch_request_api_version)
+            .unwrap();
+    let got_offset = offset_fetch_response
+        .topics
+        .get(0)
+        .unwrap()
+        .partitions
+        .get(0)
+        .unwrap()
+        .committed_offset
+        .clone();
+    Ok(got_offset)
 }
 
 fn get_records(
@@ -105,7 +148,28 @@ fn get_records(
         .clone()
         .unwrap();
 
+    if records.is_empty() {
+        return Ok(vec![]);
+    }
     // split records
     let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
     Ok(parts)
+}
+
+fn set_offset(
+    stream: &mut TcpStream,
+    consumer_group: &str,
+    topic: &str,
+    offset: i64,
+) -> Result<()> {
+    let offset_commit_request_api_version = 9;
+    let offset_commit_header = create_request_header(
+        ApiKey::OffsetCommit as i16,
+        offset_commit_request_api_version,
+    );
+    let offset_commit_request = create_offset_commit_request(consumer_group, topic, offset);
+    let offset_offset_request_buffer = create_buffer(&offset_commit_header, offset_commit_request);
+
+    stream.write(&offset_offset_request_buffer)?;
+    Ok(())
 }

@@ -91,7 +91,6 @@ mod tests {
     #[test]
     fn test_handle_topic_data_failure() {
         let produce_request = ProduceRequest::default();
-        dbg!(&produce_request);
         let topic_manager = Arc::new(TopicManager::default());
 
         let result = handle_topic_data(produce_request.topic_data, &topic_manager);

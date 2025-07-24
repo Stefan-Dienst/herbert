@@ -56,6 +56,10 @@ enum Command {
         /// The number of message you want to consume in maximum
         #[arg(short, long)]
         max_messages: i32,
+
+        /// The name of the consumer group that shall be used
+        #[arg(short, long)]
+        consumer_group: String,
     },
 }
 
@@ -75,8 +79,9 @@ fn main() {
             broker,
             topic,
             max_messages,
+            consumer_group,
         } => {
-            let _ = consume_continuos(&broker, &topic, max_messages);
+            let _ = consume_continuos(&broker, &topic, max_messages, &consumer_group);
         }
     };
 }
