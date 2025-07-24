@@ -78,16 +78,26 @@ pub fn consume_continuos(
     }
 }
 
-pub fn consume(broker: &str, topic: &str, max_messages: i32) -> Result<Vec<Vec<u8>>> {
+pub fn consume(
+    broker: &str,
+    topic: &str,
+    max_messages: i32,
+    consumer_group: &str,
+) -> Result<Vec<Vec<u8>>> {
     let mut stream = TcpStream::connect(broker)?;
-    let fetch_request_api_version = 1;
+    let initial_offset = get_offset(&mut stream, consumer_group, topic)?;
 
+    let fetch_request_api_version = 1;
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
-    let fetch_request = create_fetch_request(&topic, max_messages, 0);
+    let fetch_request = create_fetch_request(&topic, max_messages, initial_offset);
 
     let request_buffer = create_buffer(&header, fetch_request);
 
-    get_records(&mut stream, &request_buffer, fetch_request_api_version)
+    let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
+    let mut offset = initial_offset;
+    offset += records.len() as i64;
+    set_offset(&mut stream, consumer_group, topic, offset);
+    Ok(records)
 }
 
 fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Result<i64> {
