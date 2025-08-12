@@ -1,3 +1,4 @@
+use std::fs;
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
@@ -5,6 +6,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::Result;
+use arrow_schema::Schema;
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use herbert::client::consume;
@@ -72,7 +74,17 @@ enum Command {
         /// The topic which shall be created
         #[arg(short, long)]
         topic: String,
+
+        /// Path to a JSON file where an arrow schema is defined.
+        #[arg(short, long)]
+        schema_path: Option<String>,
     },
+}
+
+fn load_schema_from_json(schema_path: &str) -> Result<Schema> {
+    let data = fs::read_to_string(schema_path)?;
+    let schema: Schema = serde_json::from_str(&data)?;
+    Ok(schema)
 }
 
 fn main() {
@@ -95,8 +107,25 @@ fn main() {
         } => {
             let _ = consume_continuos(&broker, &topic, max_messages, &consumer_group);
         }
-        Command::CreateTopic { broker, topic } => {
-            let _ = create_topic(&broker, &topic);
+        Command::CreateTopic {
+            broker,
+            topic,
+            schema_path,
+        } => {
+            let schema = match schema_path {
+                Some(ref path) => match load_schema_from_json(path) {
+                    Ok(schema) => Some(schema),
+                    Err(e) => {
+                        eprintln!("Error loading schema from {}: {}", path, e);
+                        return;
+                    }
+                },
+                None => None,
+            };
+
+            if let Err(e) = create_topic(&broker, &topic, schema) {
+                eprintln!("Failed to create topic: {}", e);
+            }
         }
     };
 }

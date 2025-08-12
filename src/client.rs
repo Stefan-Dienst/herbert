@@ -11,6 +11,7 @@ use crate::kafka_api::create_offset_commit_request;
 use crate::kafka_api::create_offset_fetch_request;
 use crate::kafka_api::create_produce_request;
 use anyhow::Result;
+use arrow_schema::Schema;
 use byteorder::{BigEndian, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
@@ -187,10 +188,11 @@ fn set_offset(
     Ok(())
 }
 
-pub fn create_topic(broker: &str, topic: &str) -> Result<()> {
+pub fn create_topic(broker: &str, topic: &str, schema: Option<Schema>) -> Result<()> {
     let mut stream = TcpStream::connect(broker)?;
     let request = Request::CreateTopic {
         topic: topic.into(),
+        schema: schema,
     };
     let encoded = serde_json::to_vec(&request)?;
     let len = encoded.len() as u32;

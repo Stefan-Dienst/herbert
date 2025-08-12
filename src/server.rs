@@ -155,7 +155,8 @@ fn handle_herbert_connection(
     let request: HerbertRequest = serde_json::from_slice(&buf)?;
 
     match request {
-        HerbertRequest::CreateTopic { topic } => match topic_manager.create(&topic) {
+        HerbertRequest::CreateTopic { topic, schema } => match topic_manager.create(&topic, schema)
+        {
             Err(e) => {
                 error!("{}", e)
             }

@@ -1,10 +1,13 @@
-use super::create_topic::CreateTopic;
+use arrow_schema::Schema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum Request {
-    CreateTopic { topic: String },
+    CreateTopic {
+        topic: String,
+        schema: Option<Schema>,
+    },
 }
 
 #[cfg(test)]
@@ -15,6 +18,7 @@ mod tests {
     fn test_request_serialization() {
         let req = Request::CreateTopic {
             topic: "test".into(),
+            schema: None,
         };
         dbg!(&req);
 
@@ -26,7 +30,7 @@ mod tests {
 
         // Simulate routing
         match decoded {
-            Request::CreateTopic { topic } => {
+            Request::CreateTopic { topic, .. } => {
                 println!("Handle CreateTopic for {}", topic);
             }
             _ => panic!(),
