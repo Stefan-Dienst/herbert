@@ -9,6 +9,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use herbert::client::consume;
 use herbert::client::consume_continuos;
+use herbert::client::create_topic;
 use herbert::kafka_api::create_fetch_request;
 use herbert::kafka_api::create_produce_request;
 use kafka_protocol::messages::FetchResponse;
@@ -61,6 +62,17 @@ enum Command {
         #[arg(short, long)]
         consumer_group: String,
     },
+
+    /// Create a topic in Herbert
+    CreateTopic {
+        /// Herbert broker address, e.g. 127.0.0.1:9092
+        #[arg(short, long)]
+        broker: String,
+
+        /// The topic which shall be created
+        #[arg(short, long)]
+        topic: String,
+    },
 }
 
 fn main() {
@@ -82,6 +94,9 @@ fn main() {
             consumer_group,
         } => {
             let _ = consume_continuos(&broker, &topic, max_messages, &consumer_group);
+        }
+        Command::CreateTopic { broker, topic } => {
+            let _ = create_topic(&broker, &topic);
         }
     };
 }

@@ -64,6 +64,8 @@ pub fn handle_fetch_request(
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashMap, sync::RwLock};
+
     use crate::storage::in_memory_log::InMemoryLog;
 
     use super::*;
@@ -98,7 +100,10 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request_with_offset() {
-        let topic_manager = Arc::new(TopicManager::new(Arc::new(InMemoryLog::new())));
+        let topic_manager = Arc::new(TopicManager::new(
+            Arc::new(InMemoryLog::new()),
+            RwLock::new(HashMap::new()),
+        ));
         for ele in 0..5 {
             topic_manager.add("foobar", Bytes::from(ele.to_string()));
         }

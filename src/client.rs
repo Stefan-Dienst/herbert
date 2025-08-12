@@ -4,11 +4,14 @@ use std::net::TcpStream;
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::herbert_api::CreateTopic;
+use crate::herbert_api::Request;
 use crate::kafka_api::create_fetch_request;
 use crate::kafka_api::create_offset_commit_request;
 use crate::kafka_api::create_offset_fetch_request;
 use crate::kafka_api::create_produce_request;
 use anyhow::Result;
+use byteorder::{BigEndian, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
 use kafka_protocol::messages::FetchResponse;
@@ -181,5 +184,17 @@ fn set_offset(
     let offset_offset_request_buffer = create_buffer(&offset_commit_header, offset_commit_request);
 
     stream.write(&offset_offset_request_buffer)?;
+    Ok(())
+}
+
+pub fn create_topic(broker: &str, topic: &str) -> Result<()> {
+    let mut stream = TcpStream::connect(broker)?;
+    let request = Request::CreateTopic {
+        topic: topic.into(),
+    };
+    let encoded = serde_json::to_vec(&request)?;
+    let len = encoded.len() as u32;
+    stream.write_u32::<BigEndian>(len)?;
+    stream.write(&encoded);
     Ok(())
 }

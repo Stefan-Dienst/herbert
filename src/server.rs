@@ -1,3 +1,4 @@
+use crate::herbert_api::Request as HerbertRequest;
 use crate::kafka_api::handle_fetch_request;
 use crate::kafka_api::handle_offset_commit_request;
 use crate::kafka_api::handle_offset_fetch_request;
@@ -14,10 +15,13 @@ use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::RequestHeader;
 use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::protocol::buf::ByteBuf;
+use kafka_protocol::protocol::Request;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::thread;
 use std::{
     io::{Read, Write},
@@ -35,7 +39,7 @@ fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
     Ok(msg_len)
 }
 
-fn handle_connection(
+fn handle_kafka_connection(
     mut stream: TcpStream,
     topic_manager: Arc<TopicManager>,
     offset_manager: Arc<OffsetManager>,
@@ -138,30 +142,99 @@ fn handle_connection(
     Ok(())
 }
 
+fn handle_herbert_connection(
+    mut stream: TcpStream,
+    topic_manager: Arc<TopicManager>,
+    offset_manager: Arc<OffsetManager>,
+) -> Result<()> {
+    info!("I have received a connection!");
+    let msg_len = read_message_len(&mut stream)?;
+    let mut buf = vec![0u8; msg_len];
+    stream.read_exact(&mut buf)?;
+
+    let request: HerbertRequest = serde_json::from_slice(&buf)?;
+
+    match request {
+        HerbertRequest::CreateTopic { topic } => match topic_manager.create(&topic) {
+            Err(e) => {
+                error!("{}", e)
+            }
+            _ => {}
+        },
+    }
+
+    Ok(())
+}
+
 pub fn run() -> std::io::Result<()> {
-    let adress = "127.0.0.1:9001";
+    let ip_address = "127.0.0.1";
+    let kafka_port = "9001";
+    let herbert_port = "9002";
+
+    let kafka_address = format!("{}:{}", ip_address, kafka_port);
+    let herbert_address = format!("{}:{}", ip_address, herbert_port);
 
     info!("Create the topic");
 
-    info!("Starting the TCP server. Listening on {:?}", adress);
-    let listener = TcpListener::bind(adress)?;
-
+    // Setup backend
     let backend = Arc::new(InMemoryLog::new());
     // let mut topic_manager = Arc::new(TopicManager::default());
-    let mut topic_manager = Arc::new(TopicManager::new(backend));
+    let topic_metadatas = RwLock::new(HashMap::new());
+    let mut topic_manager = Arc::new(TopicManager::new(backend, topic_metadatas));
     let mut offset_manager = Arc::new(OffsetManager::new());
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                let tm_clone = Arc::clone(&topic_manager);
-                let om_clone = Arc::clone(&offset_manager);
-                thread::spawn(|| handle_connection(stream, tm_clone, om_clone));
-            }
-            Err(..) => {
-                error!("Oh oh!");
+    // Create Kafka listener
+    info!(
+        "Starting the Kafka listener. Listening on {:?}",
+        kafka_address
+    );
+    let kafka_listener = TcpListener::bind(kafka_address)?;
+    let tm_kafka_clone = Arc::clone(&topic_manager);
+    let om_kafka_clone = Arc::clone(&offset_manager);
+
+    thread::spawn(move || {
+        for stream in kafka_listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    let tm_clone = Arc::clone(&tm_kafka_clone);
+                    let om_clone = Arc::clone(&om_kafka_clone);
+                    thread::spawn(|| handle_kafka_connection(stream, tm_clone, om_clone));
+                }
+                Err(..) => {
+                    error!("Oh oh!");
+                }
             }
         }
+    });
+
+    // Create Herbert listener
+    info!(
+        "Starting the Herbert listener. Listening on {:?}",
+        herbert_address
+    );
+    let herbert_listener = TcpListener::bind(herbert_address)?;
+    let tm_herbert_clone = Arc::clone(&topic_manager);
+    let om_herbert_clone = Arc::clone(&offset_manager);
+
+    thread::spawn(move || {
+        for stream in herbert_listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    let tm_clone = Arc::clone(&tm_herbert_clone);
+                    let om_clone = Arc::clone(&om_herbert_clone);
+                    thread::spawn(|| handle_herbert_connection(stream, tm_clone, om_clone));
+                }
+                Err(..) => {
+                    error!("Oh oh!");
+                }
+            }
+        }
+    });
+
+    // Prevent main loop from exiting
+    loop {
+        std::thread::park();
     }
+
     Ok(())
 }
