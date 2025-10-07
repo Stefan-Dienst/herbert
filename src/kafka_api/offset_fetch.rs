@@ -62,9 +62,7 @@ pub fn handle_offset_fetch_request(
 mod tests {
     use super::*;
 
-    use bytes::{Buf, BytesMut};
-    use kafka_protocol::messages::fetch_request::FetchTopic;
-    use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
+    use bytes::BytesMut;
     use kafka_protocol::protocol::Encodable;
 
     #[test]

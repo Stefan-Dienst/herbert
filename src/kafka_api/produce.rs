@@ -72,7 +72,7 @@ mod tests {
 
     use super::*;
     use bytes::{Bytes, BytesMut};
-    use kafka_protocol::{messages, protocol::Encodable};
+    use kafka_protocol::protocol::Encodable;
 
     #[test]
     fn test_handle_topic_data() {

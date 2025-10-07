@@ -33,7 +33,6 @@ mod tests {
             Request::CreateTopic { topic, .. } => {
                 println!("Handle CreateTopic for {}", topic);
             }
-            _ => panic!(),
         }
     }
 }

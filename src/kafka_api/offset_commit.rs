@@ -63,7 +63,7 @@ pub fn handle_offset_commit_request(
 mod tests {
     use super::*;
 
-    use bytes::{Buf, BytesMut};
+    use bytes::BytesMut;
     use kafka_protocol::protocol::Encodable;
 
     #[test]
@@ -79,7 +79,7 @@ mod tests {
         let offset_commit_request_api_version = 9;
         let _ =
             offset_commit_request.encode(&mut request_buffer, offset_commit_request_api_version);
-        let response = handle_offset_commit_request(
+        let _response = handle_offset_commit_request(
             request_buffer.into(),
             offset_commit_request_api_version,
             &offset_manager,

@@ -65,7 +65,7 @@ mod tests {
     fn test_add() {
         let in_memory_queue = InMemoryQueue::new();
         let record = Bytes::from("test");
-        in_memory_queue.add("foobar", record.clone());
+        let _ = in_memory_queue.add("foobar", record.clone());
         assert!(!in_memory_queue
             .topics
             .read()
@@ -90,7 +90,7 @@ mod tests {
     fn test_remove() {
         let in_memory_queue = InMemoryQueue::new();
         let record = Bytes::from("test");
-        in_memory_queue.add("foobar", record.clone());
+        let _ = in_memory_queue.add("foobar", record.clone());
         assert!(!in_memory_queue
             .topics
             .read()
@@ -110,7 +110,7 @@ mod tests {
             record
         );
 
-        in_memory_queue.fetch("foobar", 0);
+        let _ = in_memory_queue.fetch("foobar", 0);
         assert!(in_memory_queue
             .topics
             .read()

@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn test_set_offset() {
         let offset_manager = OffsetManager::new();
-        offset_manager.set_offset("test", "foobar", 10);
+        let _ = offset_manager.set_offset("test", "foobar", 10);
         assert_eq!(
             offset_manager
                 .offsets
@@ -63,7 +63,7 @@ mod tests {
     fn test_get_offset() {
         let offset_manager = OffsetManager::new();
         let offset = 10;
-        offset_manager.set_offset("test", "foobar", offset);
+        let _ = offset_manager.set_offset("test", "foobar", offset);
         let got_offset = offset_manager.get_offset("test", "foobar");
         assert_eq!(offset, got_offset.unwrap())
     }

@@ -64,7 +64,7 @@ mod tests {
     fn test_add() {
         let in_memory_log = InMemoryLog::new();
         let record = Bytes::from("test");
-        in_memory_log.add("foobar", record.clone());
+        let _ = in_memory_log.add("foobar", record.clone());
         assert!(!in_memory_log
             .topics
             .read()
@@ -90,7 +90,7 @@ mod tests {
         let in_memory_log = InMemoryLog::new();
         let topic_name = "foobar";
         let record = Bytes::from("test");
-        in_memory_log.add(&topic_name, record.clone());
+        let _ = in_memory_log.add(&topic_name, record.clone());
         let fetched_record = in_memory_log.fetch(&topic_name, 0);
         assert_eq!(fetched_record.unwrap(), record)
     }
@@ -100,8 +100,8 @@ mod tests {
         let in_memory_log = InMemoryLog::new();
         let topic_name = "foobar";
         let record = Bytes::from("test");
-        in_memory_log.add(&topic_name, record.clone());
-        in_memory_log.add(&topic_name, record.clone());
+        let _ = in_memory_log.add(&topic_name, record.clone());
+        let _ = in_memory_log.add(&topic_name, record.clone());
         let fetched_records = in_memory_log.fetch(&topic_name, 0).unwrap();
         let parts: Vec<Bytes> = fetched_records
             .split(|b| *b == 0)
@@ -117,7 +117,7 @@ mod tests {
         let in_memory_log = InMemoryLog::new();
         let topic_name = "foobar";
         for idx in 0..5 {
-            in_memory_log.add(&topic_name, Bytes::from(idx.to_string()));
+            let _ = in_memory_log.add(&topic_name, Bytes::from(idx.to_string()));
         }
         let fetched_records = in_memory_log.fetch(&topic_name, 2).unwrap();
         let parts: Vec<Bytes> = fetched_records

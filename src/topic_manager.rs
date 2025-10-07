@@ -81,12 +81,11 @@ impl Default for TopicManager {
 mod tests {
     use super::*;
     use arrow_schema::{DataType, Field, Schema};
-    use bytes::{BufMut, BytesMut};
 
     #[test]
     fn test_create_topic() {
         let topic_manager = TopicManager::default();
-        topic_manager.create("foobar", None);
+        let _ = topic_manager.create("foobar", None);
         assert!(topic_manager
             .topic_metadatas
             .read()
@@ -106,7 +105,7 @@ mod tests {
             Field::new("score", DataType::Float64, true),
         ]);
 
-        topic_manager.create("foobar", Some(schema.clone()));
+        let _ = topic_manager.create("foobar", Some(schema.clone()));
         assert!(topic_manager
             .topic_metadatas
             .read()

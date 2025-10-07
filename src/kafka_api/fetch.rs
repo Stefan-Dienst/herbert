@@ -65,7 +65,7 @@ mod tests {
 
     use super::*;
     use crate::storage::in_memory_log::InMemoryLog;
-    use bytes::{Buf, BytesMut};
+    use bytes::BytesMut;
     use kafka_protocol::protocol::Encodable;
     use std::{collections::HashMap, sync::RwLock};
 
@@ -73,7 +73,7 @@ mod tests {
     fn test_handle_fetch_request() {
         let topic_manager = Arc::new(TopicManager::default());
         let record = Bytes::from("test");
-        topic_manager.add("foobar", record.clone());
+        let _ = topic_manager.add("foobar", record.clone());
 
         let fetch_request = create_fetch_request("foobar", 3, 0);
         let mut request_buffer = BytesMut::new();
@@ -104,7 +104,7 @@ mod tests {
             RwLock::new(HashMap::new()),
         ));
         for ele in 0..5 {
-            topic_manager.add("foobar", Bytes::from(ele.to_string()));
+            let _ = topic_manager.add("foobar", Bytes::from(ele.to_string()));
         }
 
         let fetch_request = create_fetch_request("foobar", 3, 3);
