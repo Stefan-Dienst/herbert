@@ -1,9 +1,9 @@
 use anyhow::Result;
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ProduceRequest, ProduceResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
-use log::{error, info};
+use log::error;
 use std::sync::Arc;
 
 use crate::topic_manager::TopicManager;
@@ -69,9 +69,10 @@ fn handle_topic_data(
 
 #[cfg(test)]
 mod tests {
-    use kafka_protocol::{messages, protocol::Encodable};
 
     use super::*;
+    use bytes::{Bytes, BytesMut};
+    use kafka_protocol::{messages, protocol::Encodable};
 
     #[test]
     fn test_handle_topic_data() {

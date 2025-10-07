@@ -1,10 +1,10 @@
 use anyhow::Result;
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchTopic};
 use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
 use kafka_protocol::messages::{FetchRequest, FetchResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
-use log::{error, info};
+use kafka_protocol::protocol::{Decodable, StrBytes};
+use log::error;
 use std::sync::Arc;
 
 use crate::topic_manager::TopicManager;
@@ -62,11 +62,12 @@ pub fn handle_fetch_request(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::RwLock};
-
-    use crate::storage::in_memory_log::InMemoryLog;
 
     use super::*;
+    use crate::storage::in_memory_log::InMemoryLog;
+    use bytes::{Buf, BytesMut};
+    use kafka_protocol::protocol::Encodable;
+    use std::{collections::HashMap, sync::RwLock};
 
     #[test]
     fn test_handle_fetch_request() {

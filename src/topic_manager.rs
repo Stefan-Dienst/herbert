@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
-use arrow_schema::{DataType, Field, Schema};
-use bytes::{BufMut, Bytes, BytesMut};
+use arrow_schema::Schema;
+use bytes::Bytes;
 use log::info;
 use std::{
     collections::HashMap,
@@ -80,6 +80,8 @@ impl Default for TopicManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arrow_schema::{DataType, Field, Schema};
+    use bytes::{BufMut, BytesMut};
 
     #[test]
     fn test_create_topic() {

@@ -15,7 +15,6 @@ use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::RequestHeader;
 use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::protocol::buf::ByteBuf;
-use kafka_protocol::protocol::Request;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
 
@@ -178,10 +177,9 @@ pub fn run() -> std::io::Result<()> {
 
     // Setup backend
     let backend = Arc::new(InMemoryLog::new());
-    // let mut topic_manager = Arc::new(TopicManager::default());
     let topic_metadatas = RwLock::new(HashMap::new());
-    let mut topic_manager = Arc::new(TopicManager::new(backend, topic_metadatas));
-    let mut offset_manager = Arc::new(OffsetManager::new());
+    let topic_manager = Arc::new(TopicManager::new(backend, topic_metadatas));
+    let offset_manager = Arc::new(OffsetManager::new());
 
     // Create Kafka listener
     info!(
