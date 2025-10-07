@@ -7,7 +7,7 @@ use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::error;
 use std::sync::Arc;
 
-use crate::topic_manager::{TopicManager};
+use crate::topic_manager::TopicManager;
 
 pub fn create_fetch_request(topic: &str, max_messages: i32, fetch_offset: i64) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
@@ -32,9 +32,7 @@ pub fn handle_fetch_request(
 ) -> Result<FetchResponse> {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
-        Ok(FetchRequest {
-            max_bytes, topics, ..
-        }) => {
+        Ok(FetchRequest { topics, .. }) => {
             // NOTE: Right now we always only assume one topic with one partition.
             let first_topic = topics
                 .get(0)

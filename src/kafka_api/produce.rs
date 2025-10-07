@@ -63,7 +63,7 @@ fn handle_topic_data(
         .clone()
         .ok_or_else(|| anyhow::anyhow!("No records available"))?;
 
-    topic_manager.add(topic_name, records);
+    topic_manager.add(topic_name, records)?;
     Ok(())
 }
 

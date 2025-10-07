@@ -78,14 +78,14 @@ fn handle_kafka_connection(
                 //can't use Box(dyn)...
                 match api_key {
                     Ok(ApiKey::Produce) => {
-                        let response = handle_produce_request(
+                        let _response = handle_produce_request(
                             buffer,
                             header.request_api_version,
                             &topic_manager,
                         )?;
                     }
                     Ok(ApiKey::OffsetCommit) => {
-                        let response = handle_offset_commit_request(
+                        let _response = handle_offset_commit_request(
                             buffer,
                             header.request_api_version,
                             &offset_manager,
@@ -144,7 +144,6 @@ fn handle_kafka_connection(
 fn handle_herbert_connection(
     mut stream: TcpStream,
     topic_manager: Arc<TopicManager>,
-    offset_manager: Arc<OffsetManager>,
 ) -> Result<()> {
     info!("I have received a connection!");
     let msg_len = read_message_len(&mut stream)?;
@@ -214,15 +213,13 @@ pub fn run() -> std::io::Result<()> {
     );
     let herbert_listener = TcpListener::bind(herbert_address)?;
     let tm_herbert_clone = Arc::clone(&topic_manager);
-    let om_herbert_clone = Arc::clone(&offset_manager);
 
     thread::spawn(move || {
         for stream in herbert_listener.incoming() {
             match stream {
                 Ok(stream) => {
                     let tm_clone = Arc::clone(&tm_herbert_clone);
-                    let om_clone = Arc::clone(&om_herbert_clone);
-                    thread::spawn(|| handle_herbert_connection(stream, tm_clone, om_clone));
+                    thread::spawn(|| handle_herbert_connection(stream, tm_clone));
                 }
                 Err(..) => {
                     error!("Oh oh!");
@@ -235,6 +232,4 @@ pub fn run() -> std::io::Result<()> {
     loop {
         std::thread::park();
     }
-
-    Ok(())
 }

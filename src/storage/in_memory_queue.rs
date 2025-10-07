@@ -30,7 +30,7 @@ impl RecordStorage for InMemoryQueue {
         Ok(())
     }
 
-    fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
+    fn fetch(&self, topic: &str, _fetch_offset: i64) -> Result<Bytes> {
         let mut write = self
             .topics
             .write()
