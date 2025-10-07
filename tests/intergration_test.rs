@@ -66,6 +66,7 @@ fn test_offsets_for_consuming() {
     assert_eq!(records.unwrap().len(), 0);
 
     let _ = produce(broker, topic, "4");
+    sleep(Duration::from_secs(1));
     let _ = produce(broker, topic, "5");
 
     sleep(Duration::from_secs(2));
