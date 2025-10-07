@@ -1,18 +1,21 @@
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{Buf, Bytes, BytesMut};
+use kafka_protocol::messages::fetch_request::FetchTopic;
+use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
 use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequestTopic;
 use kafka_protocol::messages::offset_fetch_response::{
     OffsetFetchResponsePartition, OffsetFetchResponseTopic,
 };
 use kafka_protocol::messages::{
-    GroupId, OffsetFetchRequest, OffsetFetchResponse, TopicName,
+    FetchRequest, FetchResponse, GroupId, OffsetFetchRequest, OffsetFetchResponse, TopicName,
 };
-use kafka_protocol::protocol::{Decodable, StrBytes};
-use log::error;
+use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
+use log::{error, info};
 use std::sync::Arc;
 use std::vec;
 
 use crate::offset_manager::OffsetManager;
+use crate::topic_manager::{self, TopicManager};
 
 pub fn create_offset_fetch_request(consumer_group: &str, topic: &str) -> OffsetFetchRequest {
     let mut offset_fetch_request = OffsetFetchRequest::default();

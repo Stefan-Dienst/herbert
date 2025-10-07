@@ -1,16 +1,19 @@
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{Buf, Bytes, BytesMut};
+use kafka_protocol::messages::fetch_request::FetchTopic;
+use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
 use kafka_protocol::messages::offset_commit_request::{
     OffsetCommitRequestPartition, OffsetCommitRequestTopic,
 };
 use kafka_protocol::messages::{
-    GroupId, OffsetCommitRequest, OffsetCommitResponse, TopicName,
+    FetchRequest, FetchResponse, GroupId, OffsetCommitRequest, OffsetCommitResponse, TopicName,
 };
-use kafka_protocol::protocol::{Decodable, StrBytes};
-use log::error;
+use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
+use log::{error, info};
 use std::sync::Arc;
 
 use crate::offset_manager::OffsetManager;
+use crate::topic_manager::{self, TopicManager};
 
 pub fn create_offset_commit_request(
     consumer_group: &str,

@@ -1,9 +1,9 @@
 use anyhow::Result;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ProduceRequest, ProduceResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
-use log::error;
+use log::{error, info};
 use std::sync::Arc;
 
 use crate::topic_manager::TopicManager;
