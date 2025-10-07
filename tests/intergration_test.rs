@@ -46,15 +46,17 @@ fn test_publishing_and_consuming_message() {
 #[test]
 fn test_offsets_for_consuming() {
     let broker = "127.0.0.1:9001";
-    let topic = "test";
+    let topic = "test2";
 
     let _child = start_server();
 
     let _ = produce(broker, topic, "1");
+    sleep(Duration::from_secs(1));
     let _ = produce(broker, topic, "2");
+    sleep(Duration::from_secs(1));
     let _ = produce(broker, topic, "3");
 
-    sleep(Duration::from_secs(1));
+    sleep(Duration::from_secs(2));
     let records = consume(broker, topic, 1, "consumer-1");
     assert_eq!(
         records.unwrap(),
@@ -66,6 +68,7 @@ fn test_offsets_for_consuming() {
     let _ = produce(broker, topic, "4");
     let _ = produce(broker, topic, "5");
 
+    sleep(Duration::from_secs(2));
     let records = consume(broker, topic, 1, "consumer-2");
     assert_eq!(
         records.unwrap(),
