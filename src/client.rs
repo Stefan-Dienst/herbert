@@ -4,7 +4,6 @@ use std::net::TcpStream;
 use std::thread::sleep;
 use std::time::Duration;
 
-use crate::herbert_api::CreateTopic;
 use crate::herbert_api::Request;
 use crate::kafka_api::create_fetch_request;
 use crate::kafka_api::create_offset_commit_request;
@@ -14,9 +13,7 @@ use anyhow::Result;
 use arrow_schema::Schema;
 use byteorder::{BigEndian, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
-use clap::{Parser, Subcommand};
 use kafka_protocol::messages::FetchResponse;
-use kafka_protocol::messages::OffsetCommitResponse;
 use kafka_protocol::messages::OffsetFetchResponse;
 use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::messages::{ApiKey, RequestHeader};

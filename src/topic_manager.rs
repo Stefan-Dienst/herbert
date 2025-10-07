@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
-use arrow_schema::{DataType, Field, Schema};
-use bytes::{BufMut, Bytes, BytesMut};
+use arrow_schema::Schema;
+use bytes::Bytes;
 use log::info;
 use std::{
     collections::HashMap,

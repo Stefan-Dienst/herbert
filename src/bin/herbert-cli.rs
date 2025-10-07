@@ -1,23 +1,10 @@
 use std::fs;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpStream;
-use std::thread::sleep;
-use std::time::Duration;
 
 use anyhow::Result;
 use arrow_schema::Schema;
-use bytes::{BufMut, Bytes, BytesMut};
 use clap::{Parser, Subcommand};
-use herbert::client::consume;
 use herbert::client::consume_continuos;
 use herbert::client::create_topic;
-use herbert::kafka_api::create_fetch_request;
-use herbert::kafka_api::create_produce_request;
-use kafka_protocol::messages::FetchResponse;
-use kafka_protocol::messages::ResponseHeader;
-use kafka_protocol::messages::{ApiKey, RequestHeader};
-use kafka_protocol::protocol::{Decodable, Encodable};
 
 use herbert::client::produce;
 

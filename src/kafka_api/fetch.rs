@@ -1,13 +1,13 @@
 use anyhow::Result;
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchTopic};
 use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
 use kafka_protocol::messages::{FetchRequest, FetchResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
-use log::{error, info};
+use kafka_protocol::protocol::{Decodable, StrBytes};
+use log::error;
 use std::sync::Arc;
 
-use crate::topic_manager::{self, TopicManager};
+use crate::topic_manager::{TopicManager};
 
 pub fn create_fetch_request(topic: &str, max_messages: i32, fetch_offset: i64) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
