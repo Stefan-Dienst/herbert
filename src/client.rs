@@ -74,7 +74,7 @@ pub fn consume_continuos(
             println!("{:?}", std::str::from_utf8(&record).unwrap());
         }
         offset += records.len() as i64;
-        set_offset(&mut stream, consumer_group, topic, offset);
+        set_offset(&mut stream, consumer_group, topic, offset)?;
         sleep(Duration::from_secs(2));
     }
 }
@@ -97,7 +97,7 @@ pub fn consume(
     let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
     let mut offset = initial_offset;
     offset += records.len() as i64;
-    set_offset(&mut stream, consumer_group, topic, offset);
+    set_offset(&mut stream, consumer_group, topic, offset)?;
     Ok(records)
 }
 
@@ -111,10 +111,11 @@ fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Resu
     stream.write(&offset_fetch_request_buffer)?;
     // Read response
     let mut buffer = [0; 512];
-    stream.read(&mut buffer);
+    stream.read(&mut buffer)?;
     // Decode response
     let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
-    let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+    // Decode header if not accessed to consume bytes.
+    let _header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
 
     let offset_fetch_response =
         OffsetFetchResponse::decode(&mut Bytes::from(new_buf), offset_fetch_request_api_version)
@@ -140,11 +141,12 @@ fn get_records(
 
     // Read response
     let mut buffer = [0; 512];
-    stream.read(&mut buffer);
+    stream.read(&mut buffer)?;
 
     // Decode response
     let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
-    let header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+    // Decode header if not accessed to consume bytes.
+    let _header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
 
     let fetch_response =
         FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
@@ -194,6 +196,6 @@ pub fn create_topic(broker: &str, topic: &str, schema: Option<Schema>) -> Result
     let encoded = serde_json::to_vec(&request)?;
     let len = encoded.len() as u32;
     stream.write_u32::<BigEndian>(len)?;
-    stream.write(&encoded);
+    stream.write(&encoded)?;
     Ok(())
 }
