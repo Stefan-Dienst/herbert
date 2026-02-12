@@ -1,12 +1,18 @@
 use std::fs;
+use std::fs::File;
+use std::io::BufReader;
+use std::sync::Arc;
 
 use anyhow::Result;
+use arrow_array::RecordBatch;
 use arrow_schema::Schema;
+use arrow_schema::SchemaRef;
 use clap::{Parser, Subcommand};
 use herbert::client::consume_continuos;
 use herbert::client::create_topic;
 
 use herbert::client::produce;
+use herbert::client::produce_record_batch;
 
 #[derive(Parser, Debug)]
 #[command(name = "herbert--cli")]
@@ -31,6 +37,25 @@ enum Command {
         /// The message you want to produce
         #[arg(short, long)]
         message: String,
+    },
+
+    /// Produce a record batch from a given json file with a given schema
+    ProduceRecordBatch {
+        /// Herbert broker address, e.g. 127.0.0.1:9092
+        #[arg(short, long)]
+        broker: String,
+
+        /// The topic to produce to
+        #[arg(short, long)]
+        topic: String,
+
+        /// Path to JSON file with record data
+        #[arg(short, long)]
+        data_path: String,
+
+        /// Path to schema JSON file
+        #[arg(short, long)]
+        schema_path: String,
     },
 
     /// Consume message(s) from herbert
@@ -74,6 +99,16 @@ fn load_schema_from_json(schema_path: &str) -> Result<Schema> {
     Ok(schema)
 }
 
+fn load_record_batch_from_json(data_path: &str, schema: SchemaRef) -> Result<RecordBatch> {
+    let file = File::open(data_path).unwrap();
+
+    let mut json = arrow_json::ReaderBuilder::new(schema)
+        .build(BufReader::new(file))
+        .unwrap();
+    let batch = json.next().unwrap().unwrap();
+    Ok(batch)
+}
+
 fn main() {
     env_logger::init();
     let args = Args::parse();
@@ -85,6 +120,28 @@ fn main() {
             message,
         } => {
             let _ = produce(&broker, &topic, &message);
+        }
+        Command::ProduceRecordBatch {
+            broker,
+            topic,
+            data_path,
+            schema_path,
+        } => {
+            let schema = match load_schema_from_json(&schema_path) {
+                Ok(schema) => schema,
+                Err(e) => {
+                    eprintln!("Error loading schema from {}: {}", schema_path, e);
+                    return;
+                }
+            };
+            match load_record_batch_from_json(&data_path, Arc::new(schema)) {
+                Ok(record_batch) => {
+                    let _ = produce_record_batch(&broker, &topic, &record_batch);
+                }
+                Err(e) => {
+                    eprintln!("Error loading the data from {}: {}", data_path, e)
+                }
+            }
         }
         Command::Consume {
             broker,

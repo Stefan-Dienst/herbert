@@ -6,7 +6,10 @@ edition = "2024"
 [dependencies]
 anyerror = "0.1.13"
 anyhow = "1.0.98"
-arrow-schema = { version = "56.0.0", features = ["serde"] }
+arrow-array = "57.3.0"
+arrow-ipc = "57.3.0"
+arrow-json = "57.3.0"
+arrow-schema = { version = "57.3.0", features = ["serde"] }
 byteorder = "1.5.0"
 bytes = "1.10.1"
 clap = { version = "4.5.35", features = ["derive"] }

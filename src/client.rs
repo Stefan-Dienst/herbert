@@ -10,6 +10,8 @@ use crate::kafka_api::create_offset_commit_request;
 use crate::kafka_api::create_offset_fetch_request;
 use crate::kafka_api::create_produce_request;
 use anyhow::Result;
+use arrow_array::RecordBatch;
+use arrow_ipc::writer::StreamWriter;
 use arrow_schema::Schema;
 use byteorder::{BigEndian, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
@@ -51,6 +53,25 @@ pub fn produce(broker: &str, topic: &str, message: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn produce_record_batch(broker: &str, topic: &str, record_batch: &RecordBatch) -> Result<()> {
+    let mut stream = TcpStream::connect(broker)?;
+    let produce_request_api_version = 9;
+
+    let header = create_request_header(ApiKey::Produce as i16, produce_request_api_version);
+
+    let mut buffer = Vec::new();
+    let mut writer = StreamWriter::try_new(&mut buffer, &record_batch.schema())?;
+    writer.write(&record_batch)?;
+    writer.finish()?;
+
+    let record = Bytes::from(buffer);
+    let produce_request = create_produce_request(&topic, record);
+
+    let request_buffer = create_buffer(&header, produce_request);
+    stream.write(&request_buffer)?;
+
+    Ok(())
+}
 pub fn consume_continuos(
     broker: &str,
     topic: &str,
