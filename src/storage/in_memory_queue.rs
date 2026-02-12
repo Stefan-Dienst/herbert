@@ -1,13 +1,14 @@
 use anyhow::Result;
+use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
 use log::info;
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 
-use super::RecordStorage;
+use super::{RecordStorage, StoredRecord};
 
 pub struct InMemoryQueue {
-    topics: RwLock<HashMap<String, VecDeque<Bytes>>>,
+    topics: RwLock<HashMap<String, VecDeque<StoredRecord>>>,
 }
 
 impl InMemoryQueue {
@@ -19,7 +20,7 @@ impl InMemoryQueue {
 }
 
 impl RecordStorage for InMemoryQueue {
-    fn add(&self, topic: &str, record: Bytes) -> Result<()> {
+    fn add(&self, topic: &str, record: StoredRecord) -> Result<()> {
         let mut write = self
             .topics
             .write()
@@ -38,14 +39,24 @@ impl RecordStorage for InMemoryQueue {
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
         while !queue.is_empty() {
-            let message = queue
+            let stored_record = queue
                 .pop_back()
                 .ok_or_else(|| anyhow::anyhow!("Queue is empyt? Why?"))?;
-            records.put(message.clone());
+
+            let record_bytes = match stored_record {
+                StoredRecord::Raw(bytes) => bytes.clone(),
+                StoredRecord::Batch(batch) => {
+                    let mut buffer = Vec::new();
+                    let mut writer = StreamWriter::try_new(&mut buffer, &batch.schema())?;
+                    writer.write(&batch)?;
+                    writer.finish()?;
+                    Bytes::from(buffer)
+                }
+            };
+            records.put(record_bytes);
             if !queue.is_empty() {
                 records.put_u8(0);
             }
-            info!("Found message {:?}", message);
         }
         Ok(records.into())
     }
@@ -64,7 +75,7 @@ mod tests {
     #[test]
     fn test_add() {
         let in_memory_queue = InMemoryQueue::new();
-        let record = Bytes::from("test");
+        let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_queue.add("foobar", record.clone());
         assert!(!in_memory_queue
             .topics
@@ -89,7 +100,7 @@ mod tests {
     #[test]
     fn test_remove() {
         let in_memory_queue = InMemoryQueue::new();
-        let record = Bytes::from("test");
+        let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_queue.add("foobar", record.clone());
         assert!(!in_memory_queue
             .topics

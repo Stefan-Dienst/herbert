@@ -1,13 +1,14 @@
 use anyhow::Result;
+use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
 use log::info;
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 
-use super::RecordStorage;
+use super::{RecordStorage, StoredRecord};
 
 pub struct InMemoryLog {
-    topics: RwLock<HashMap<String, VecDeque<Bytes>>>,
+    topics: RwLock<HashMap<String, VecDeque<StoredRecord>>>,
 }
 
 impl InMemoryLog {
@@ -19,7 +20,7 @@ impl InMemoryLog {
 }
 
 impl RecordStorage for InMemoryLog {
-    fn add(&self, topic: &str, record: Bytes) -> Result<()> {
+    fn add(&self, topic: &str, record: StoredRecord) -> Result<()> {
         let mut write = self
             .topics
             .write()
@@ -39,9 +40,19 @@ impl RecordStorage for InMemoryLog {
         let mut records = BytesMut::new();
 
         let mut iter = queue.iter().skip(fetch_offset as usize).peekable();
+        while let Some(stored_record) = iter.next() {
+            let record_bytes = match stored_record {
+                StoredRecord::Raw(bytes) => bytes.clone(),
+                StoredRecord::Batch(batch) => {
+                    let mut buffer = Vec::new();
+                    let mut writer = StreamWriter::try_new(&mut buffer, &batch.schema())?;
+                    writer.write(&batch)?;
+                    writer.finish()?;
+                    Bytes::from(buffer)
+                }
+            };
 
-        while let Some(record) = iter.next() {
-            records.put(record.clone());
+            records.put(record_bytes);
             if iter.peek().is_some() {
                 records.put_u8(0);
             }
@@ -63,7 +74,7 @@ mod tests {
     #[test]
     fn test_add() {
         let in_memory_log = InMemoryLog::new();
-        let record = Bytes::from("test");
+        let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_log.add("foobar", record.clone());
         assert!(!in_memory_log
             .topics
@@ -89,17 +100,19 @@ mod tests {
     fn test_fetch() {
         let in_memory_log = InMemoryLog::new();
         let topic_name = "foobar";
-        let record = Bytes::from("test");
+        let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_log.add(&topic_name, record.clone());
         let fetched_record = in_memory_log.fetch(&topic_name, 0);
-        assert_eq!(fetched_record.unwrap(), record)
+        if let StoredRecord::Raw(bytes) = record {
+            assert_eq!(fetched_record.unwrap(), bytes)
+        }
     }
 
     #[test]
     fn test_fetch_multiple() {
         let in_memory_log = InMemoryLog::new();
         let topic_name = "foobar";
-        let record = Bytes::from("test");
+        let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_log.add(&topic_name, record.clone());
         let _ = in_memory_log.add(&topic_name, record.clone());
         let fetched_records = in_memory_log.fetch(&topic_name, 0).unwrap();
@@ -108,8 +121,10 @@ mod tests {
             .map(Bytes::copy_from_slice)
             .collect();
         assert_eq!(parts.len(), 2);
-        assert_eq!(parts.get(0).unwrap(), &record);
-        assert_eq!(parts.get(1).unwrap(), &record);
+        if let StoredRecord::Raw(bytes) = record {
+            assert_eq!(parts.get(0).unwrap(), &bytes);
+            assert_eq!(parts.get(1).unwrap(), &bytes);
+        }
     }
 
     #[test]
@@ -117,7 +132,7 @@ mod tests {
         let in_memory_log = InMemoryLog::new();
         let topic_name = "foobar";
         for idx in 0..5 {
-            let _ = in_memory_log.add(&topic_name, Bytes::from(idx.to_string()));
+            let _ = in_memory_log.add(&topic_name, StoredRecord::Raw(Bytes::from(idx.to_string())));
         }
         let fetched_records = in_memory_log.fetch(&topic_name, 2).unwrap();
         let parts: Vec<Bytes> = fetched_records

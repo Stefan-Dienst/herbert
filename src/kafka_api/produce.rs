@@ -15,6 +15,7 @@ pub fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
     produce_request
 }
 
+//FIXME: I am sometimes saying record but in the end we are storing multiple records.
 fn create_topic_produce_data(topic: &str, record: Bytes) -> TopicProduceData {
     let mut topic_to_produce_to = TopicProduceData::default();
     topic_to_produce_to.name = TopicName::from(StrBytes::from_string(topic.to_string()));
