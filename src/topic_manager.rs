@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use log::{error, info};
@@ -12,7 +13,7 @@ use crate::storage::{in_memory_queue::InMemoryQueue, RecordStorage};
 use arrow_ipc::reader::StreamReader;
 use std::io::Cursor;
 
-fn validate_record_batch_against_schema(record: &Bytes, expected_schema: &Schema) -> Result<()> {
+fn parse_record_batch_from_bytes(record: &Bytes, expected_schema: &Schema) -> Result<RecordBatch> {
     if record.len() < 8 {
         bail!("Record too small to be valid Arrow IPC stream");
     }
@@ -24,25 +25,16 @@ fn validate_record_batch_against_schema(record: &Bytes, expected_schema: &Schema
     }
 
     let cursor = Cursor::new(record);
+    let mut reader = StreamReader::try_new(cursor, None)?;
 
-    let mut reader = StreamReader::try_new(cursor, None)
-        .map_err(|e| anyhow::anyhow!("Failed to parse Arrow IPC stream: {}", e))?;
-
-    // TODO: Handle if multiple record batches are found
-    if let Some(Ok(batch)) = reader.next() {
-        let actual_schema = batch.schema();
-
-        if actual_schema.as_ref() != expected_schema {
-            bail!(
-                "Record does not match expected schema.\nExpected: {:?}\nActual: {:?}",
-                expected_schema,
-                actual_schema
-            );
+    if let Some(batch) = reader.next() {
+        let batch = batch?;
+        if batch.schema().as_ref() != expected_schema {
+            bail!("Schema mismatch");
         }
-
-        Ok(())
+        Ok(batch)
     } else {
-        bail!("No record batch found in the record")
+        bail!("No record batch found")
     }
 }
 
@@ -83,24 +75,27 @@ impl TopicManager {
             .read()
             .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
 
-        // TODO: key idea is that record is just bytest that could hold multiple records, e.g.
-        // arrow recordBatch. I should implement that if there is a schema we are expecting
-        // sa recordBtach and handle it this way.
-        if let Some(metadata) = read.get(topic) {
+        let stored_record = if let Some(metadata) = read.get(topic) {
             if let Some(ref schema) = metadata.schema {
-                let validation = validate_record_batch_against_schema(&record, schema);
-                match validation {
+                // Topic has schema: parse and store as RecordBatch
+                match parse_record_batch_from_bytes(&record, schema) {
+                    Ok(batch) => crate::storage::StoredRecord::Batch(batch),
                     Err(e) => {
                         error!("{}", e);
                         error!("Record was not added to topic.");
                         bail!("{}", e)
                     }
-                    _ => {}
                 }
-            };
-        }
-        self.backend
-            .add(topic, crate::storage::StoredRecord::Raw(record))
+            } else {
+                // Topic without schema: store raw bytes
+                crate::storage::StoredRecord::Raw(record)
+            }
+        } else {
+            // Topic doesn't exist yet: store raw bytes
+            crate::storage::StoredRecord::Raw(record)
+        };
+
+        self.backend.add(topic, stored_record)
     }
 
     pub fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
