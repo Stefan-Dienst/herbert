@@ -1,4 +1,5 @@
 use anyhow::Result;
+use arrow_array::RecordBatch;
 use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
 use log::info;
@@ -38,25 +39,33 @@ impl RecordStorage for InMemoryLog {
             .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
+        let mut batches: Vec<&RecordBatch> = Vec::new();
 
         let mut iter = queue.iter().skip(fetch_offset as usize).peekable();
         while let Some(stored_record) = iter.next() {
-            let record_bytes = match stored_record {
-                StoredRecord::Raw(bytes) => bytes.clone(),
+            match stored_record {
+                StoredRecord::Raw(bytes) => {
+                    records.put(bytes.clone());
+                    if iter.peek().is_some() {
+                        records.put_u8(0);
+                    }
+                }
                 StoredRecord::Batch(batch) => {
-                    let mut buffer = Vec::new();
-                    let mut writer = StreamWriter::try_new(&mut buffer, &batch.schema())?;
-                    writer.write(&batch)?;
-                    writer.finish()?;
-                    Bytes::from(buffer)
+                    batches.push(batch);
                 }
             };
-
-            records.put(record_bytes);
-            if iter.peek().is_some() {
-                records.put_u8(0);
-            }
         }
+
+        if batches.len() > 0 {
+            let mut buffer = Vec::new();
+            let mut writer = StreamWriter::try_new(&mut buffer, &batches[0].schema())?;
+            for batch in batches {
+                writer.write(&batch)?;
+            }
+            writer.finish()?;
+            records.put(Bytes::from(buffer));
+        }
+
         Ok(records.into())
     }
 }

@@ -43,6 +43,7 @@ impl RecordStorage for InMemoryQueue {
                 .pop_back()
                 .ok_or_else(|| anyhow::anyhow!("Queue is empyt? Why?"))?;
 
+            // TODO: adjust for sending arrow batches as a single batch.
             let record_bytes = match stored_record {
                 StoredRecord::Raw(bytes) => bytes.clone(),
                 StoredRecord::Batch(batch) => {

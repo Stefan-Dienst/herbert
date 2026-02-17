@@ -1,3 +1,4 @@
+use std::io::Cursor;
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
@@ -11,6 +12,7 @@ use crate::kafka_api::create_offset_fetch_request;
 use crate::kafka_api::create_produce_request;
 use anyhow::Result;
 use arrow_array::RecordBatch;
+use arrow_ipc::reader::StreamReader;
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::Schema;
 use byteorder::{BigEndian, WriteBytesExt};
@@ -91,10 +93,32 @@ pub fn consume_continuos(
         let request_buffer = create_buffer(&header, fetch_request);
         println!("Consumed records:");
         let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
-        for record in &records {
-            println!("{:?}", std::str::from_utf8(&record).unwrap());
+        if records.is_empty() {
+            sleep(Duration::from_secs(2));
+            continue;
         }
-        offset += records.len() as i64;
+
+        // Arrow IPC streams start with 0xFFFFFFFF (continuation marker) or the "ARROW1" magic
+        let magic = &records[..6.min(records.len())];
+        if magic == b"ARROW1" || &records[..4] == &[0xFF, 0xFF, 0xFF, 0xFF] {
+            let cursor = Cursor::new(records);
+            let mut reader = StreamReader::try_new(cursor, None)?;
+
+            let mut batches = Vec::new();
+            while let Some(batch_result) = reader.next() {
+                println!("{:?}", batch_result);
+                batches.push(batch_result?);
+            }
+            // FIXME: offsets do not work.
+            offset += 1;
+        } else {
+            let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
+            for part in &parts {
+                println!("{:?}", std::str::from_utf8(&part).unwrap());
+            }
+            offset += parts.len() as i64;
+        }
+
         set_offset(&mut stream, consumer_group, topic, offset)?;
         sleep(Duration::from_secs(2));
     }
@@ -116,10 +140,13 @@ pub fn consume(
     let request_buffer = create_buffer(&header, fetch_request);
 
     let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
+
+    let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
     let mut offset = initial_offset;
-    offset += records.len() as i64;
+
+    offset += parts.len() as i64;
     set_offset(&mut stream, consumer_group, topic, offset)?;
-    Ok(records)
+    Ok(parts)
 }
 
 fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Result<i64> {
@@ -157,21 +184,25 @@ fn get_records(
     stream: &mut TcpStream,
     request_buffer: &BytesMut,
     fetch_request_api_version: i16,
-) -> Result<Vec<Vec<u8>>> {
+) -> Result<Bytes> {
     stream.write(&request_buffer)?;
 
-    // Read response
-    let mut buffer = [0; 512];
+    // Read response length
+    let mut len_buf = [0; 4];
+    stream.read_exact(&mut len_buf)?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+
+    let mut buffer = vec![0u8; len];
     stream.read(&mut buffer)?;
 
     // Decode response
-    let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
+    let mut new_buf = Bytes::from(buffer);
     // Decode header if not accessed to consume bytes.
     let _header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
 
     let fetch_response =
         FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
-    let records = fetch_response
+    let records: Bytes = fetch_response
         .responses
         .get(0)
         .unwrap()
@@ -182,12 +213,7 @@ fn get_records(
         .clone()
         .unwrap();
 
-    if records.is_empty() {
-        return Ok(vec![]);
-    }
-    // split records
-    let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
-    Ok(parts)
+    Ok(records)
 }
 
 fn set_offset(
