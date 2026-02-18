@@ -2,20 +2,28 @@ use anyhow::Result;
 use arrow_array::RecordBatch;
 use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
-use log::info;
+use log::{error, info};
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 
 use super::{RecordStorage, StoredRecord};
 
+#[derive(Debug, Clone, Copy)]
+struct RecordOffset {
+    batch_index: usize,
+    row_offset: usize,
+}
+
 pub struct InMemoryLog {
     topics: RwLock<HashMap<String, VecDeque<StoredRecord>>>,
+    offsets: RwLock<HashMap<String, VecDeque<RecordOffset>>>,
 }
 
 impl InMemoryLog {
     pub fn new() -> Self {
         Self {
             topics: RwLock::new(HashMap::new()),
+            offsets: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -27,21 +35,72 @@ impl RecordStorage for InMemoryLog {
             .write()
             .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
+
+        let mut offset_write = self
+            .offsets
+            .write()
+            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+        let offset_queue = offset_write
+            .entry(topic.to_string())
+            .or_insert(VecDeque::new());
+        let batch_index = queue.len();
+
+        match record {
+            StoredRecord::Raw(_) => {
+                offset_queue.push_back(RecordOffset {
+                    batch_index: batch_index,
+                    row_offset: 0,
+                });
+            }
+            StoredRecord::Batch(ref record_batch) => {
+                let num_rows = record_batch.num_rows();
+
+                for row_offset in 0..num_rows {
+                    offset_queue.push_back(RecordOffset {
+                        batch_index: batch_index,
+                        row_offset: row_offset,
+                    });
+                }
+            }
+        }
+
+        // Only push after offsets have been set
+        // FIXME: How do we handle if system crashes after pushing offsets, but not the record?
         queue.push_back(record);
         info!("Currently topics have {:?}", write);
+
         Ok(())
     }
 
     fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
+        let mut offset_write = self
+            .offsets
+            .write()
+            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+
+        let offset_queue = offset_write
+            .entry(topic.to_string())
+            .or_insert(VecDeque::new());
+        let record_offset = match offset_queue.get(fetch_offset as usize) {
+            Some(record_offset) => record_offset,
+            None => {
+                error!(
+                    "Could not find the RecordOffset for offset: {:?}",
+                    fetch_offset
+                );
+                return Ok(Bytes::new());
+            }
+        };
+
         let mut write = self
             .topics
             .write()
             .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
-        let mut batches: Vec<&RecordBatch> = Vec::new();
+        let mut batches: Vec<RecordBatch> = Vec::new();
 
-        let mut iter = queue.iter().skip(fetch_offset as usize).peekable();
+        let mut iter = queue.iter().skip(record_offset.batch_index).peekable();
         while let Some(stored_record) = iter.next() {
             match stored_record {
                 StoredRecord::Raw(bytes) => {
@@ -51,7 +110,17 @@ impl RecordStorage for InMemoryLog {
                     }
                 }
                 StoredRecord::Batch(batch) => {
-                    batches.push(batch);
+                    // If this is the first batch we also have to consider the offset inside the
+                    // RecordBatch
+                    if batches.is_empty() {
+                        let batch_slice = batch.slice(
+                            record_offset.row_offset,
+                            batch.num_rows() - record_offset.row_offset,
+                        );
+                        batches.push(batch_slice)
+                    } else {
+                        batches.push(batch.clone());
+                    }
                 }
             };
         }

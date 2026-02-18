@@ -149,7 +149,8 @@ fn main() {
             max_messages,
             consumer_group,
         } => {
-            let _ = consume_continuos(&broker, &topic, max_messages, &consumer_group);
+            let result = consume_continuos(&broker, &topic, max_messages, &consumer_group);
+            dbg!(&result);
         }
         Command::CreateTopic {
             broker,

@@ -99,25 +99,32 @@ pub fn consume_continuos(
         }
 
         // Arrow IPC streams start with 0xFFFFFFFF (continuation marker) or the "ARROW1" magic
-        let magic = &records[..6.min(records.len())];
-        if magic == b"ARROW1" || &records[..4] == &[0xFF, 0xFF, 0xFF, 0xFF] {
-            let cursor = Cursor::new(records);
-            let mut reader = StreamReader::try_new(cursor, None)?;
-
-            let mut batches = Vec::new();
-            while let Some(batch_result) = reader.next() {
-                println!("{:?}", batch_result);
-                batches.push(batch_result?);
-            }
-            // FIXME: offsets do not work.
-            // TODO: how are offsets calculated for recordbatches
-            offset += 1;
-        } else {
+        if records.len() < 8 {
             let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
             for part in &parts {
                 println!("{:?}", std::str::from_utf8(&part).unwrap());
             }
             offset += parts.len() as i64;
+        } else {
+            let magic = &records[..6.min(records.len())];
+            if magic == b"ARROW1" || &records[..4] == &[0xFF, 0xFF, 0xFF, 0xFF] {
+                let cursor = Cursor::new(records);
+                let mut reader = StreamReader::try_new(cursor, None)?;
+
+                let mut batches = Vec::new();
+                while let Some(batch_result) = reader.next() {
+                    println!("{:?}", batch_result);
+                    batches.push(batch_result?);
+                }
+                let num_rows: usize = batches.iter().map(|batch| batch.num_rows()).sum();
+                offset += num_rows as i64;
+            } else {
+                let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
+                for part in &parts {
+                    println!("{:?}", std::str::from_utf8(&part).unwrap());
+                }
+                offset += parts.len() as i64;
+            }
         }
 
         set_offset(&mut stream, consumer_group, topic, offset)?;
@@ -193,7 +200,11 @@ fn get_records(
 
     // Read response length
     let mut len_buf = [0; 4];
-    stream.read_exact(&mut len_buf)?;
+    let are_bytes_available = stream.read_exact(&mut len_buf);
+    match are_bytes_available {
+        Err(_) => return Ok(Bytes::new()),
+        Ok(_) => {}
+    }
     let len = u32::from_be_bytes(len_buf) as usize;
 
     let mut buffer = vec![0u8; len];
