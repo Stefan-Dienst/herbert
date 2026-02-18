@@ -110,6 +110,7 @@ pub fn consume_continuos(
                 batches.push(batch_result?);
             }
             // FIXME: offsets do not work.
+            // TODO: how are offsets calculated for recordbatches
             offset += 1;
         } else {
             let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
@@ -140,6 +141,9 @@ pub fn consume(
     let request_buffer = create_buffer(&header, fetch_request);
 
     let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
+    if records.is_empty() {
+        return Ok(vec![]);
+    }
 
     let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
     let mut offset = initial_offset;
