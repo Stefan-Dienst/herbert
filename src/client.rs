@@ -160,6 +160,41 @@ pub fn consume(
     Ok(parts)
 }
 
+pub fn consume_record_batches(
+    broker: &str,
+    topic: &str,
+    max_messages: i32,
+    consumer_group: &str,
+) -> Result<Vec<arrow_array::RecordBatch>> {
+    let mut stream = TcpStream::connect(broker)?;
+    let initial_offset = get_offset(&mut stream, consumer_group, topic)?;
+
+    let fetch_request_api_version = 1;
+    let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
+    let fetch_request = create_fetch_request(&topic, max_messages, initial_offset);
+
+    let request_buffer = create_buffer(&header, fetch_request);
+
+    let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
+    if records.is_empty() {
+        return Ok(vec![]);
+    }
+    let cursor = Cursor::new(records);
+    let mut reader = StreamReader::try_new(cursor, None)?;
+
+    let mut batches = Vec::new();
+    while let Some(batch_result) = reader.next() {
+        println!("{:?}", batch_result);
+        batches.push(batch_result?);
+    }
+    let num_rows: usize = batches.iter().map(|batch| batch.num_rows()).sum();
+    let mut offset = initial_offset;
+    offset += num_rows as i64;
+
+    set_offset(&mut stream, consumer_group, topic, offset)?;
+    Ok(batches)
+}
+
 fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Result<i64> {
     let offset_fetch_request_api_version = 6;
     let offset_fetch_header =
