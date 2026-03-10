@@ -121,7 +121,6 @@ fn test_record_batches() {
     let _ = produce_record_batch(&kafka_api, topic, &batch);
     sleep(Duration::from_secs(1));
 
-    // TODO: This does not work as consume can only be used for pure bytes and not record batches.
     let records = consume_record_batches(&kafka_api, topic, 1, "consumer-1");
     assert_eq!(records.unwrap(), vec![batch]);
 }
