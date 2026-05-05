@@ -22,6 +22,8 @@ pub struct InMemoryLog {
 impl InMemoryLog {
     pub fn new() -> Self {
         Self {
+            // FIXME: don't use a RW lock on all topics. Maybe look into DashMap.
+            // Later maybe also look into cross beam.
             topics: RwLock::new(HashMap::new()),
             offsets: RwLock::new(HashMap::new()),
         }
@@ -75,6 +77,7 @@ impl RecordStorage for InMemoryLog {
     fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
         let mut offset_write = self
             .offsets
+            // FIXME don't hold a write lock on a fetch.
             .write()
             .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
 

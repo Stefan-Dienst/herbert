@@ -5,3 +5,4 @@ pub mod offset_manager;
 pub mod server;
 pub mod storage;
 pub mod topic_manager;
+pub mod wal;

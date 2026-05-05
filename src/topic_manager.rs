@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::storage::{in_memory_queue::InMemoryQueue, RecordStorage};
+use crate::storage::{in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue, RecordStorage};
 
 use arrow_ipc::reader::StreamReader;
 use std::io::Cursor;
@@ -69,6 +69,23 @@ impl TopicManager {
         }
     }
 
+    pub fn default_log() -> Self {
+        let backend = Arc::new(InMemoryLog::new());
+        let topics = RwLock::new(HashMap::new());
+        TopicManager {
+            backend,
+            topic_metadatas: topics,
+        }
+    }
+
+    pub fn exists(&self, topic: &str) -> Result<bool> {
+        let read = self
+            .topic_metadatas
+            .read()
+            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+        Ok(read.contains_key(topic))
+    }
+
     pub fn add(&self, topic: &str, record: Bytes) -> Result<()> {
         let read = self
             .topic_metadatas
@@ -88,12 +105,15 @@ impl TopicManager {
                 }
             } else {
                 // Topic without schema: store raw bytes
+                // NOTE: I could here also automatically create topic with schema for record batch.
                 crate::storage::StoredRecord::Raw(record)
             }
         } else {
             // Topic doesn't exist yet: store raw bytes
             crate::storage::StoredRecord::Raw(record)
         };
+
+        //TODO: Add WAL group commit logic here
 
         self.backend.add(topic, stored_record)
     }
@@ -147,6 +167,15 @@ mod tests {
             .contains_key("foobar"));
         let result = topic_manager.create("foobar", None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_exists() {
+        let topic_manager = TopicManager::default();
+        let _ = topic_manager.create("foobar", None);
+        assert!(topic_manager.exists("foobar").unwrap());
+
+        assert!(!topic_manager.exists("does_not_exist").unwrap());
     }
 
     #[test]
