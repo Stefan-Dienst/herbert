@@ -2,7 +2,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
     path::Path,
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::Result;
@@ -11,10 +11,17 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
 use log::info;
 
-use crate::{storage::StoredRecord, topic_manager::TopicManager};
+use crate::{
+    storage::{RecordStorage, StoredRecord},
+    topic_manager::TopicManager,
+};
 
-struct WriteAheadLog {
+// TODO: make this somehow configurable.
+const NUM_UNCOMMITTED_MESSAGES: usize = 1;
+
+pub struct WriteAheadLog {
     file: Mutex<BufWriter<File>>,
+    buffer: Mutex<Vec<(String, StoredRecord)>>,
 }
 
 impl WriteAheadLog {
@@ -23,23 +30,28 @@ impl WriteAheadLog {
 
         Ok(Self {
             file: Mutex::new(BufWriter::new(file)),
+            buffer: Mutex::new(Vec::new()),
         })
     }
 
-    pub fn add(&mut self, topic: &str, records: StoredRecord) -> Result<()> {
+    pub fn add(&self, topic: &str, records: StoredRecord) -> Result<()> {
         let mut write = self
             .file
             .lock()
             .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
 
-        let buffer = self.serialize(topic, records)?;
-
+        let buffer = self.serialize(topic, &records)?;
         write.write(&buffer);
+
+        self.buffer
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .push((topic.to_string(), records));
 
         Ok(())
     }
 
-    pub fn serialize(&self, topic: &str, records: StoredRecord) -> Result<Vec<u8>> {
+    pub fn serialize(&self, topic: &str, records: &StoredRecord) -> Result<Vec<u8>> {
         let mut buffer: Vec<u8> = Vec::new();
         buffer.extend(Bytes::from(topic.to_owned()));
         buffer.push(b'\n');
@@ -67,6 +79,33 @@ impl WriteAheadLog {
         };
 
         Ok(buffer)
+    }
+
+    pub fn flush(&self, backend: &Arc<dyn RecordStorage>) -> Result<()> {
+        self.file
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .flush()?;
+
+        for (topic, record) in self
+            .buffer
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .drain(..)
+        {
+            backend.add(&topic, record)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn need_to_flush(&self) -> Result<bool> {
+        Ok(self
+            .buffer
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .len()
+            >= NUM_UNCOMMITTED_MESSAGES)
     }
 
     pub fn read(path: impl AsRef<Path>, topic_manager: &mut TopicManager) -> Result<()> {

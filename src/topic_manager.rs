@@ -5,13 +5,18 @@ use bytes::Bytes;
 use log::{error, info};
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, RwLock},
 };
 
 use crate::storage::{in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue, RecordStorage};
+use crate::wal::WriteAheadLog;
 
 use arrow_ipc::reader::StreamReader;
 use std::io::Cursor;
+
+// TODO: make this somehow configurable.
+const WAL_PATH: &str = "herbert.wal";
 
 fn parse_record_batch_from_bytes(record: &Bytes, expected_schema: &Schema) -> Result<RecordBatch> {
     if record.len() < 8 {
@@ -56,6 +61,7 @@ impl TopicMetadata {
 pub struct TopicManager {
     backend: Arc<dyn RecordStorage>,
     topic_metadatas: RwLock<HashMap<String, TopicMetadata>>,
+    wal: WriteAheadLog,
 }
 
 impl TopicManager {
@@ -66,6 +72,8 @@ impl TopicManager {
         TopicManager {
             backend,
             topic_metadatas: topics,
+            //FIXME: remove this unwrap somehow
+            wal: WriteAheadLog::new(Path::new(WAL_PATH)).unwrap(),
         }
     }
 
@@ -75,6 +83,7 @@ impl TopicManager {
         TopicManager {
             backend,
             topic_metadatas: topics,
+            wal: WriteAheadLog::new(Path::new(WAL_PATH)).unwrap(),
         }
     }
 
@@ -113,9 +122,12 @@ impl TopicManager {
             crate::storage::StoredRecord::Raw(record)
         };
 
-        //TODO: Add WAL group commit logic here
-
-        self.backend.add(topic, stored_record)
+        // WAL commit happens here
+        self.wal.add(topic, stored_record);
+        if let Ok(true) = self.wal.need_to_flush() {
+            self.wal.flush(&self.backend);
+        };
+        Ok(())
     }
 
     pub fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
@@ -147,6 +159,7 @@ impl Default for TopicManager {
         TopicManager {
             backend,
             topic_metadatas: topics,
+            wal: WriteAheadLog::new(Path::new(WAL_PATH)).unwrap(),
         }
     }
 }
