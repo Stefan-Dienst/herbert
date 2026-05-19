@@ -58,6 +58,7 @@ impl OffsetManager {
                 })
                 .collect::<HashMap<String, i64>>(),
         )?;
+        dbg!("i am flushing offsets");
         fs::write(&self.config.offset_path, json)?;
 
         Ok(())

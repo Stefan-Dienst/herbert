@@ -71,16 +71,24 @@ fn handle_topic_data(
 #[cfg(test)]
 mod tests {
 
+    use crate::config::Config;
+
     use super::*;
     use bytes::{Bytes, BytesMut};
     use kafka_protocol::protocol::Encodable;
+    use tempfile::TempDir;
 
     #[test]
     fn test_handle_topic_data() {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let topic_manager = Arc::new(TopicManager::default());
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
         let produce_request = create_produce_request(&topic_name, record.clone());
 
         let _ = handle_topic_data(produce_request.topic_data, &topic_manager);
@@ -93,7 +101,13 @@ mod tests {
     #[test]
     fn test_handle_topic_data_failure() {
         let produce_request = ProduceRequest::default();
-        let topic_manager = Arc::new(TopicManager::default());
+
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
 
         let result = handle_topic_data(produce_request.topic_data, &topic_manager);
         assert!(result.is_err());
@@ -104,7 +118,13 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let topic_manager = Arc::new(TopicManager::default());
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
+
         let produce_request = create_produce_request(&topic_name, record.clone());
 
         let mut request_buffer = BytesMut::new();
@@ -124,7 +144,13 @@ mod tests {
     #[test]
     fn test_handle_produce_request_failure() {
         let produce_request = ProduceRequest::default();
-        let topic_manager = Arc::new(TopicManager::default());
+
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
 
         let mut request_buffer = BytesMut::new();
         let produce_request_api_version = 9;

@@ -131,7 +131,7 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let wal_path = temp_dir.path().join("test.wal");
 
-        let wal = WriteAheadLog::new(Arc::new(Config::test_default()))?;
+        let wal = WriteAheadLog::new(Arc::new(Config::default().with_wal_path(&wal_path)))?;
 
         assert!(wal.file.lock().unwrap().buffer().is_empty());
 

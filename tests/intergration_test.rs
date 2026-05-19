@@ -38,12 +38,14 @@ fn wait_on_server(broker: &str, timeout_secs: u64) -> bool {
 fn start_server(kafka_port: u16, herbert_port: u16) -> ServerGuard {
     let temp_dir = TempDir::new().expect("should be able to create tmp dir");
     let wal_path = temp_dir.path().join("test.wal");
+    let offset_path = temp_dir.path().join("test_offset.json");
 
     let child = Command::new("target/debug/herbert")
         .env("RUST_LOG", "off")
         .env("KAFKA_PORT", kafka_port.to_string())
         .env("HERBERT_PORT", herbert_port.to_string())
         .env("WAL_PATH", wal_path.to_str().unwrap())
+        .env("OFFSET_PATH", offset_path.to_str().unwrap())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()

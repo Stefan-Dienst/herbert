@@ -70,6 +70,7 @@ pub struct TopicManager {
 }
 
 impl TopicManager {
+    // FIXME: In tests this auto creates an empty herbert.wal.
     pub fn new(
         backend: Arc<dyn RecordStorage>,
         topics: RwLock<HashMap<String, TopicMetadata>>,
@@ -100,8 +101,11 @@ impl TopicManager {
     }
 
     pub fn with_config(self, config: Arc<Config>) -> Self {
+        let wal = WriteAheadLog::new(config.clone())
+            .expect("It should be possible to build a WAL from the config.");
         Self {
             config: config,
+            wal: wal,
             ..self
         }
     }
@@ -258,7 +262,13 @@ mod tests {
 
     #[test]
     fn test_create_topic() {
-        let topic_manager = TopicManager::default();
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
+
         let _ = topic_manager.create("foobar", None);
         assert!(topic_manager
             .topic_metadatas
@@ -271,7 +281,13 @@ mod tests {
 
     #[test]
     fn test_exists() {
-        let topic_manager = TopicManager::default();
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
+
         let _ = topic_manager.create("foobar", None);
         assert!(topic_manager.exists("foobar").unwrap());
 
@@ -280,7 +296,12 @@ mod tests {
 
     #[test]
     fn test_create_topic_with_schema() {
-        let topic_manager = TopicManager::default();
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
 
         let schema = Schema::new(vec![
             Field::new("id", DataType::Int64, false),

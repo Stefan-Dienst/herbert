@@ -70,10 +70,17 @@ mod tests {
     use bytes::BytesMut;
     use kafka_protocol::protocol::Encodable;
     use std::{collections::HashMap, sync::RwLock};
+    use tempfile::TempDir;
 
     #[test]
     fn test_handle_fetch_request() {
-        let topic_manager = Arc::new(TopicManager::default());
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+        let topic_manager = Arc::new(
+            TopicManager::default()
+                .with_config(Arc::new(Config::default().with_wal_path(&wal_path))),
+        );
+
         let record = Bytes::from("test");
         let _ = topic_manager.add("foobar", record.clone());
 
@@ -101,10 +108,13 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request_with_offset() {
+        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let wal_path = temp_dir.path().join("test.wal");
+
         let topic_manager = Arc::new(TopicManager::new(
             Arc::new(InMemoryLog::new()),
             RwLock::new(HashMap::new()),
-            Arc::new(Config::test_default()),
+            Arc::new(Config::default().with_wal_path(&wal_path)),
         ));
         for ele in 0..5 {
             let _ = topic_manager.add("foobar", Bytes::from(ele.to_string()));
