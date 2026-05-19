@@ -6,6 +6,7 @@ pub struct Config {
     pub herbert_port: u16,
     pub num_uncommitted_messages: usize,
     pub wal_path: PathBuf,
+    pub offset_path: PathBuf,
 }
 
 impl Config {
@@ -27,6 +28,10 @@ impl Config {
                 .ok()
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(PathBuf::from("herbert.wal")),
+            offset_path: env::var("OFFSET_PATH")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(PathBuf::from("herbert_offset.json")),
         }
     }
 
@@ -36,6 +41,7 @@ impl Config {
             herbert_port: 9002,
             num_uncommitted_messages: 1,
             wal_path: PathBuf::from("herbert.wal"),
+            offset_path: PathBuf::from("herbert_offset.json"),
         }
     }
 
@@ -45,12 +51,20 @@ impl Config {
             herbert_port: 9002,
             num_uncommitted_messages: 1,
             wal_path: PathBuf::from("test.wal"),
+            offset_path: PathBuf::from("test_offset.json"),
         }
     }
 
     pub fn with_wal_path(self, path: &Path) -> Self {
         Self {
             wal_path: PathBuf::from(path),
+            ..self
+        }
+    }
+
+    pub fn with_offset_path(self, path: &Path) -> Self {
+        Self {
+            offset_path: PathBuf::from(path),
             ..self
         }
     }

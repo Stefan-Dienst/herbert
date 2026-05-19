@@ -178,12 +178,17 @@ pub fn run() -> std::io::Result<()> {
     // Setup backend
     let backend = Arc::new(InMemoryLog::new());
     let topic_metadatas = RwLock::new(HashMap::new());
-    let tm = TopicManager::new(backend, topic_metadatas, config);
+    let tm = TopicManager::new(backend, topic_metadatas, config.clone());
+    let mut om = OffsetManager::new(config.clone());
 
+    // Recover after crash.
+    // FIXME: handle errors here correcltey. If no file exists is fine, but if something goes wrong
+    // panic.
     tm.recover();
+    om.recover();
 
     let topic_manager = Arc::new(tm);
-    let offset_manager = Arc::new(OffsetManager::new());
+    let offset_manager = Arc::new(om);
 
     // Create Kafka listener
     info!(

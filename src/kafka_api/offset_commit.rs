@@ -61,14 +61,21 @@ pub fn handle_offset_commit_request(
 
 #[cfg(test)]
 mod tests {
+    use crate::config::Config;
+
     use super::*;
 
     use bytes::BytesMut;
     use kafka_protocol::protocol::Encodable;
+    use tempfile::TempDir;
 
     #[test]
-    fn test_handle_offset_commit_request() {
-        let offset_manager = Arc::new(OffsetManager::new());
+    fn test_handle_offset_commit_request() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let offset_path = temp_dir.path().join("offset.json");
+        let config = Arc::new(Config::test_default().with_offset_path(&offset_path));
+
+        let offset_manager = Arc::new(OffsetManager::new(config));
 
         let consumer_group = "test";
         let topic = "foobar";
@@ -92,6 +99,7 @@ mod tests {
                 .get(&(consumer_group.to_string(), topic.to_string()))
                 .unwrap(),
             &10
-        )
+        );
+        Ok(())
     }
 }
