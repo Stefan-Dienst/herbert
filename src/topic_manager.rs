@@ -1,22 +1,26 @@
 use anyhow::{bail, Result};
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
+use byteorder::LittleEndian;
+use byteorder::ReadBytesExt;
 use bytes::Bytes;
 use log::{error, info};
+use std::fs::{File, OpenOptions};
 use std::{
     collections::HashMap,
+    io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
     path::Path,
     sync::{Arc, RwLock},
 };
 
-use crate::storage::{in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue, RecordStorage};
+use crate::config;
+use crate::config::Config;
+use crate::storage::{
+    in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue, RecordStorage, StoredRecord,
+};
 use crate::wal::WriteAheadLog;
 
 use arrow_ipc::reader::StreamReader;
-use std::io::Cursor;
-
-// TODO: make this somehow configurable.
-const WAL_PATH: &str = "herbert.wal";
 
 fn parse_record_batch_from_bytes(record: &Bytes, expected_schema: &Schema) -> Result<RecordBatch> {
     if record.len() < 8 {
@@ -62,28 +66,43 @@ pub struct TopicManager {
     backend: Arc<dyn RecordStorage>,
     topic_metadatas: RwLock<HashMap<String, TopicMetadata>>,
     wal: WriteAheadLog,
+    config: Arc<Config>,
 }
 
 impl TopicManager {
     pub fn new(
         backend: Arc<dyn RecordStorage>,
         topics: RwLock<HashMap<String, TopicMetadata>>,
+        config: Arc<Config>,
     ) -> Self {
+        let wal = WriteAheadLog::new(config.clone())
+            .expect("It should be possible to build a WAL from the config.");
         TopicManager {
             backend,
             topic_metadatas: topics,
-            //FIXME: remove this unwrap somehow
-            wal: WriteAheadLog::new(Path::new(WAL_PATH)).unwrap(),
+            wal: wal,
+            config: config,
         }
     }
 
     pub fn default_log() -> Self {
         let backend = Arc::new(InMemoryLog::new());
         let topics = RwLock::new(HashMap::new());
+        let config = Arc::new(Config::default());
+        let wal = WriteAheadLog::new(config.clone())
+            .expect("It should be possible to build a WAL from the config.");
         TopicManager {
             backend,
             topic_metadatas: topics,
-            wal: WriteAheadLog::new(Path::new(WAL_PATH)).unwrap(),
+            wal: wal,
+            config: config,
+        }
+    }
+
+    pub fn with_config(self, config: Arc<Config>) -> Self {
+        Self {
+            config: config,
+            ..self
         }
     }
 
@@ -105,7 +124,7 @@ impl TopicManager {
             if let Some(ref schema) = metadata.schema {
                 // Topic has schema: parse and store as RecordBatch
                 match parse_record_batch_from_bytes(&record, schema) {
-                    Ok(batch) => crate::storage::StoredRecord::Batch(batch),
+                    Ok(batch) => StoredRecord::Batch(batch),
                     Err(e) => {
                         error!("{}", e);
                         error!("Record was not added to topic.");
@@ -115,11 +134,11 @@ impl TopicManager {
             } else {
                 // Topic without schema: store raw bytes
                 // NOTE: I could here also automatically create topic with schema for record batch.
-                crate::storage::StoredRecord::Raw(record)
+                StoredRecord::Raw(record)
             }
         } else {
             // Topic doesn't exist yet: store raw bytes
-            crate::storage::StoredRecord::Raw(record)
+            StoredRecord::Raw(record)
         };
 
         // WAL commit happens here
@@ -150,16 +169,82 @@ impl TopicManager {
         }
         Ok(())
     }
+
+    pub fn recover(&self) -> Result<()> {
+        let read = self
+            .wal
+            .file
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
+
+        let file = File::open(&self.config.wal_path)?;
+        let mut buf_reader = BufReader::new(file);
+
+        loop {
+            let mut contents = Vec::new();
+            let result = buf_reader.read_until(b'\n', &mut contents)?;
+
+            // Read everything
+            if contents.len() == 0 {
+                break;
+            }
+
+            contents.pop();
+            let topic = String::from_utf8(contents)?;
+
+            let indicator = buf_reader.read_u8()?;
+            let size = buf_reader.read_u32::<LittleEndian>()?;
+
+            let mut buf = vec![0u8; size as usize];
+
+            match indicator {
+                // Raw bytes
+                0 => {
+                    buf_reader.read_exact(&mut buf)?;
+                    let record = StoredRecord::Raw(Bytes::from(buf));
+                    self.backend.add(&topic, record)?;
+                }
+                // RecordBatch
+                1 => {
+                    buf_reader.read_exact(&mut buf)?;
+                    let mut reader = StreamReader::try_new(Cursor::new(&buf), None)?;
+                    if let Some(record_batch) = reader.next() {
+                        let record_batch = record_batch?;
+
+                        // If topic does not yet exist create it with schema.
+                        if !self.exists(&topic)? {
+                            self.create(&topic, Some(record_batch.schema().as_ref().to_owned()));
+                        };
+                        let record = StoredRecord::Batch(record_batch);
+                        self.backend.add(&topic, record)?;
+                    };
+                }
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Unknown indicator encountered: {}",
+                        indicator
+                    ))
+                }
+            };
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for TopicManager {
     fn default() -> Self {
         let backend = Arc::new(InMemoryQueue::new());
         let topics = RwLock::new(HashMap::new());
+        let config = Arc::new(Config::default());
+        let wal = WriteAheadLog::new(config.clone())
+            .expect("It should be possible to build a WAL from the config.");
+
         TopicManager {
             backend,
             topic_metadatas: topics,
-            wal: WriteAheadLog::new(Path::new(WAL_PATH)).unwrap(),
+            wal: wal,
+            config: config.clone(),
         }
     }
 }
@@ -167,7 +252,9 @@ impl Default for TopicManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arrow_array::record_batch;
     use arrow_schema::{DataType, Field, Schema};
+    use tempfile::TempDir;
 
     #[test]
     fn test_create_topic() {
@@ -216,5 +303,54 @@ mod tests {
                 .unwrap(),
             &TopicMetadata::new("foobar", Some(schema.clone()))
         )
+    }
+
+    #[test]
+    fn test_recover() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let wal_path = temp_dir.path().join("test.wal");
+
+        let config = Arc::new(Config::test_default().with_wal_path(&wal_path));
+
+        let batch = record_batch!(
+            ("a", Int32, [1, 2, 3]),
+            ("b", Float64, [Some(4.0), None, Some(5.0)]),
+            ("c", Utf8, ["alpha", "beta", "gamma"])
+        )?;
+
+        let mut wal = WriteAheadLog::new(config.clone())?;
+        wal.add("foobar", StoredRecord::Batch(batch.clone()));
+        wal.add("foobar", StoredRecord::Batch(batch.clone()));
+
+        wal.add("test", StoredRecord::Batch(batch.clone()));
+
+        wal.file.lock().unwrap().flush();
+
+        let mut topic_manager = TopicManager::default_log().with_config(config.clone());
+
+        println!("hi");
+        let result = topic_manager.recover()?;
+
+        dbg!(&topic_manager.exists("foobar")?);
+        assert!(&topic_manager.exists("foobar")?);
+        assert!(&topic_manager.exists("test")?);
+
+        // Check record batches on foobar
+        let record_bytes = topic_manager.fetch("foobar", 0).unwrap();
+        dbg!(&record_bytes);
+        let cursor = Cursor::new(record_bytes);
+        let mut reader = StreamReader::try_new(cursor, None)?;
+        assert_eq!(reader.next().unwrap().unwrap(), batch);
+        assert_eq!(reader.next().unwrap().unwrap(), batch);
+        assert!(reader.next().is_none());
+
+        // Check record batches on test
+        let record_bytes = topic_manager.fetch("test", 0).unwrap();
+        let cursor = Cursor::new(record_bytes);
+        let mut reader = StreamReader::try_new(cursor, None)?;
+        assert_eq!(reader.next().unwrap().unwrap(), batch);
+        assert!(reader.next().is_none());
+
+        Ok(())
     }
 }

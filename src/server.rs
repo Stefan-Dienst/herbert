@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::herbert_api::Request as HerbertRequest;
 use crate::kafka_api::handle_fetch_request;
 use crate::kafka_api::handle_offset_commit_request;
@@ -167,18 +168,21 @@ fn handle_herbert_connection(
 
 pub fn run() -> std::io::Result<()> {
     let ip_address = "127.0.0.1";
-    let kafka_port = "9001";
-    let herbert_port = "9002";
+    let config = Arc::new(Config::from_env());
 
-    let kafka_address = format!("{}:{}", ip_address, kafka_port);
-    let herbert_address = format!("{}:{}", ip_address, herbert_port);
+    let kafka_address = format!("{}:{}", ip_address, config.kafka_port);
+    let herbert_address = format!("{}:{}", ip_address, config.herbert_port);
 
     info!("Create the topic");
 
     // Setup backend
     let backend = Arc::new(InMemoryLog::new());
     let topic_metadatas = RwLock::new(HashMap::new());
-    let topic_manager = Arc::new(TopicManager::new(backend, topic_metadatas));
+    let tm = TopicManager::new(backend, topic_metadatas, config);
+
+    tm.recover();
+
+    let topic_manager = Arc::new(tm);
     let offset_manager = Arc::new(OffsetManager::new());
 
     // Create Kafka listener

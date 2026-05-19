@@ -66,7 +66,7 @@ pub fn handle_fetch_request(
 mod tests {
 
     use super::*;
-    use crate::storage::in_memory_log::InMemoryLog;
+    use crate::{config::Config, storage::in_memory_log::InMemoryLog};
     use bytes::BytesMut;
     use kafka_protocol::protocol::Encodable;
     use std::{collections::HashMap, sync::RwLock};
@@ -104,6 +104,7 @@ mod tests {
         let topic_manager = Arc::new(TopicManager::new(
             Arc::new(InMemoryLog::new()),
             RwLock::new(HashMap::new()),
+            Arc::new(Config::test_default()),
         ));
         for ele in 0..5 {
             let _ = topic_manager.add("foobar", Bytes::from(ele.to_string()));

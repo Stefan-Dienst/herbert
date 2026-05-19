@@ -1,4 +1,5 @@
 pub mod client;
+pub mod config;
 pub mod herbert_api;
 pub mod kafka_api;
 pub mod offset_manager;
