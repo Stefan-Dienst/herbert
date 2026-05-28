@@ -12,7 +12,7 @@ use crate::topic_manager::TopicManager;
 pub fn create_fetch_request(topic: &str, max_messages: i32, fetch_offset: i64) -> FetchRequest {
     let mut fetch_request = FetchRequest::default();
 
-    // FIXME: Max bytes does not work. Herbet can't decode it somehow.
+    // FIXME: Max bytes does not work. Herbert can't decode it somehow.
     // If I use a different api version things break down. Kafka protocol is
     // not properly handled...
     fetch_request.max_bytes = max_messages;
