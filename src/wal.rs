@@ -5,7 +5,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::Result;
 use arrow_ipc::{reader::StreamReader, writer::StreamWriter};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use bytes::Bytes;
@@ -13,6 +12,7 @@ use log::info;
 
 use crate::{
     config::Config,
+    error::HerbertError,
     storage::{RecordStorage, StoredRecord},
     topic_manager::TopicManager,
 };
@@ -24,7 +24,7 @@ pub struct WriteAheadLog {
 }
 
 impl WriteAheadLog {
-    pub fn new(config: Arc<Config>) -> Result<Self> {
+    pub fn new(config: Arc<Config>) -> Result<Self, HerbertError> {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -37,24 +37,21 @@ impl WriteAheadLog {
         })
     }
 
-    pub fn add(&self, topic: &str, records: StoredRecord) -> Result<()> {
-        let mut write = self
-            .file
-            .lock()
-            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
+    pub fn add(&self, topic: &str, records: StoredRecord) -> Result<(), HerbertError> {
+        let mut write = self.file.lock().map_err(|e| HerbertError::PoisonError)?;
 
         let buffer = self.serialize(topic, &records)?;
         write.write(&buffer);
 
         self.buffer
             .lock()
-            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .map_err(|e| HerbertError::PoisonError)?
             .push((topic.to_string(), records));
 
         Ok(())
     }
 
-    pub fn serialize(&self, topic: &str, records: &StoredRecord) -> Result<Vec<u8>> {
+    pub fn serialize(&self, topic: &str, records: &StoredRecord) -> Result<Vec<u8>, HerbertError> {
         let mut buffer: Vec<u8> = Vec::new();
         buffer.extend(Bytes::from(topic.to_owned()));
         buffer.push(b'\n');
@@ -84,17 +81,17 @@ impl WriteAheadLog {
         Ok(buffer)
     }
 
-    pub fn flush(&self, backend: &Arc<dyn RecordStorage>) -> Result<()> {
+    pub fn flush(&self, backend: &Arc<dyn RecordStorage>) -> Result<(), HerbertError> {
         info!("Flushing the WAL");
         self.file
             .lock()
-            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .map_err(|e| HerbertError::PoisonError)?
             .flush()?;
 
         for (topic, record) in self
             .buffer
             .lock()
-            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .map_err(|e| HerbertError::PoisonError)?
             .drain(..)
         {
             backend.add(&topic, record)?;
@@ -103,11 +100,11 @@ impl WriteAheadLog {
         Ok(())
     }
 
-    pub fn need_to_flush(&self) -> Result<bool> {
+    pub fn need_to_flush(&self) -> Result<bool, HerbertError> {
         Ok(self
             .buffer
             .lock()
-            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?
+            .map_err(|e| HerbertError::PoisonError)?
             .len()
             >= self.config.num_uncommitted_messages)
     }
@@ -127,7 +124,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_new() -> Result<()> {
+    fn test_new() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let wal_path = temp_dir.path().join("test.wal");
 
@@ -139,7 +136,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_raw_bytes() -> Result<()> {
+    fn test_add_raw_bytes() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let wal_path = temp_dir.path().join("test.wal");
         let config = Arc::new(Config::test_default().with_wal_path(&wal_path));
@@ -163,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_record_batch() -> Result<()> {
+    fn test_add_record_batch() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let wal_path = temp_dir.path().join("test.wal");
         let config = Arc::new(Config::test_default().with_wal_path(&wal_path));

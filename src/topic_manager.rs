@@ -1,4 +1,3 @@
-use anyhow::{bail, Result};
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use byteorder::LittleEndian;
@@ -15,22 +14,31 @@ use std::{
 
 use crate::config;
 use crate::config::Config;
+use crate::error::HerbertError;
 use crate::storage::{
-    in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue, RecordStorage, StoredRecord,
+    RecordStorage, StoredRecord, in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue,
 };
 use crate::wal::WriteAheadLog;
 
 use arrow_ipc::reader::StreamReader;
 
-fn parse_record_batch_from_bytes(record: &Bytes, expected_schema: &Schema) -> Result<RecordBatch> {
+fn parse_record_batch_from_bytes(
+    record: &Bytes,
+    expected_schema: &Schema,
+) -> Result<RecordBatch, HerbertError> {
     if record.len() < 8 {
-        bail!("Record too small to be valid Arrow IPC stream");
+        return Err(HerbertError::InvalidArrowIpc(format!(
+            "record len {} smaller than 8",
+            record.len()
+        )));
     }
 
     // Arrow IPC streams start with 0xFFFFFFFF (continuation marker) or the "ARROW1" magic
     let magic = &record[..6.min(record.len())];
     if magic != b"ARROW1" && &record[..4] != &[0xFF, 0xFF, 0xFF, 0xFF] {
-        bail!("Invalid Arrow IPC format: missing magic bytes");
+        return Err(HerbertError::InvalidArrowIpc(
+            "missing magic bytes".to_string(),
+        ));
     }
 
     let cursor = Cursor::new(record);
@@ -39,11 +47,16 @@ fn parse_record_batch_from_bytes(record: &Bytes, expected_schema: &Schema) -> Re
     if let Some(batch) = reader.next() {
         let batch = batch?;
         if batch.schema().as_ref() != expected_schema {
-            bail!("Schema mismatch");
+            return Err(HerbertError::SchemaError {
+                expected: format!("{:?}", batch.schema().as_ref()),
+                found: format!("{:?}", expected_schema),
+            });
         }
         Ok(batch)
     } else {
-        bail!("No record batch found")
+        return Err(HerbertError::InvalidArrowIpc(
+            "no record batch found".to_string(),
+        ));
     }
 }
 
@@ -110,19 +123,19 @@ impl TopicManager {
         }
     }
 
-    pub fn exists(&self, topic: &str) -> Result<bool> {
+    pub fn exists(&self, topic: &str) -> Result<bool, HerbertError> {
         let read = self
             .topic_metadatas
             .read()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|e| HerbertError::PoisonError)?;
         Ok(read.contains_key(topic))
     }
 
-    pub fn add(&self, topic: &str, record: Bytes) -> Result<()> {
+    pub fn add(&self, topic: &str, record: Bytes) -> Result<(), HerbertError> {
         let read = self
             .topic_metadatas
             .read()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|e| HerbertError::PoisonError)?;
 
         let stored_record = if let Some(metadata) = read.get(topic) {
             if let Some(ref schema) = metadata.schema {
@@ -132,7 +145,7 @@ impl TopicManager {
                     Err(e) => {
                         error!("{}", e);
                         error!("Record was not added to topic.");
-                        bail!("{}", e)
+                        return Err(e);
                     }
                 }
             } else {
@@ -153,17 +166,17 @@ impl TopicManager {
         Ok(())
     }
 
-    pub fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
+    pub fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes, HerbertError> {
         self.backend.fetch(topic, fetch_offset)
     }
 
-    pub fn create(&self, topic: &str, schema: Option<Schema>) -> Result<()> {
+    pub fn create(&self, topic: &str, schema: Option<Schema>) -> Result<(), HerbertError> {
         let mut write = self
             .topic_metadatas
             .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|e| HerbertError::PoisonError)?;
         if write.contains_key(topic) {
-            bail!("Topic {} already exists", topic)
+            return Err(HerbertError::TopicAlreadyExists(topic.to_string()));
         } else {
             write.insert(topic.into(), TopicMetadata::new(topic, schema.clone()));
             info!(
@@ -174,12 +187,12 @@ impl TopicManager {
         Ok(())
     }
 
-    pub fn recover(&self) -> Result<()> {
+    pub fn recover(&self) -> Result<(), HerbertError> {
         let read = self
             .wal
             .file
             .lock()
-            .map_err(|e| anyhow::anyhow!("Mutex poisoned: {}", e))?;
+            .map_err(|e| HerbertError::PoisonError)?;
 
         let file = File::open(&self.config.wal_path)?;
         let mut buf_reader = BufReader::new(file);
@@ -224,10 +237,7 @@ impl TopicManager {
                     };
                 }
                 _ => {
-                    return Err(anyhow::anyhow!(
-                        "Unknown indicator encountered: {}",
-                        indicator
-                    ))
+                    return Err(HerbertError::IndicatorError(indicator));
                 }
             };
         }
@@ -270,11 +280,13 @@ mod tests {
         );
 
         let _ = topic_manager.create("foobar", None);
-        assert!(topic_manager
-            .topic_metadatas
-            .read()
-            .unwrap()
-            .contains_key("foobar"));
+        assert!(
+            topic_manager
+                .topic_metadatas
+                .read()
+                .unwrap()
+                .contains_key("foobar")
+        );
         let result = topic_manager.create("foobar", None);
         assert!(result.is_err());
     }
@@ -310,11 +322,13 @@ mod tests {
         ]);
 
         let _ = topic_manager.create("foobar", Some(schema.clone()));
-        assert!(topic_manager
-            .topic_metadatas
-            .read()
-            .unwrap()
-            .contains_key("foobar"));
+        assert!(
+            topic_manager
+                .topic_metadatas
+                .read()
+                .unwrap()
+                .contains_key("foobar")
+        );
         assert_eq!(
             topic_manager
                 .topic_metadatas
@@ -327,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn test_recover() -> Result<()> {
+    fn test_recover() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let wal_path = temp_dir.path().join("test.wal");
 

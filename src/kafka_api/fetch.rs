@@ -1,4 +1,3 @@
-use anyhow::Result;
 use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchTopic};
 use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
@@ -7,6 +6,7 @@ use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::error;
 use std::sync::Arc;
 
+use crate::error::HerbertError;
 use crate::topic_manager::TopicManager;
 
 pub fn create_fetch_request(topic: &str, max_messages: i32, fetch_offset: i64) -> FetchRequest {
@@ -31,19 +31,17 @@ pub fn handle_fetch_request(
     buf: Bytes,
     api_version: i16,
     topic_manager: &Arc<TopicManager>,
-) -> Result<FetchResponse> {
+) -> Result<FetchResponse, HerbertError> {
     let fetch_request = FetchRequest::decode(&mut Bytes::from(buf), api_version);
     match fetch_request {
         Ok(FetchRequest { topics, .. }) => {
             // NOTE: Right now we always only assume one topic with one partition.
-            let first_topic = topics
-                .get(0)
-                .ok_or_else(|| anyhow::anyhow!("No Topic data available in fetch request"))?;
+            let first_topic = topics.get(0).ok_or_else(|| HerbertError::NoTopicData)?;
             let topic_name = first_topic.topic.to_string();
             let first_partition = first_topic
                 .partitions
                 .get(0)
-                .ok_or_else(|| anyhow::anyhow!("No partition data available in fetch request"))?;
+                .ok_or_else(|| HerbertError::NoPartitionData)?;
             let fetch_offset = first_partition.fetch_offset;
             let records = topic_manager.fetch(&topic_name, fetch_offset)?;
 
@@ -56,8 +54,9 @@ pub fn handle_fetch_request(
             Ok(response)
         }
         _ => {
+            // TODO: handle this case properly
             error!("Something wrong with the fetch request.");
-            panic!();
+            return Err(HerbertError::UnknownError);
         }
     }
 }

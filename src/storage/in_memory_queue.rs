@@ -5,6 +5,8 @@ use log::info;
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 
+use crate::error::HerbertError;
+
 use super::{RecordStorage, StoredRecord};
 
 pub struct InMemoryQueue {
@@ -20,28 +22,21 @@ impl InMemoryQueue {
 }
 
 impl RecordStorage for InMemoryQueue {
-    fn add(&self, topic: &str, record: StoredRecord) -> Result<()> {
-        let mut write = self
-            .topics
-            .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+    fn add(&self, topic: &str, record: StoredRecord) -> Result<(), HerbertError> {
+        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         queue.push_front(record);
         info!("Currently topics have {:?}", write);
         Ok(())
     }
 
-    fn fetch(&self, topic: &str, _fetch_offset: i64) -> Result<Bytes> {
-        let mut write = self
-            .topics
-            .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+    fn fetch(&self, topic: &str, _fetch_offset: i64) -> Result<Bytes, HerbertError> {
+        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
         while !queue.is_empty() {
-            let stored_record = queue
-                .pop_back()
-                .ok_or_else(|| anyhow::anyhow!("Queue is empyt? Why?"))?;
+            let stored_record = queue.pop_back().ok_or_else(|| HerbertError::EmptyQueue)?;
 
             // TODO: adjust for sending arrow batches as a single batch.
             let record_bytes = match stored_record {
@@ -78,13 +73,15 @@ mod tests {
         let in_memory_queue = InMemoryQueue::new();
         let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_queue.add("foobar", record.clone());
-        assert!(!in_memory_queue
-            .topics
-            .read()
-            .unwrap()
-            .get("foobar")
-            .unwrap()
-            .is_empty());
+        assert!(
+            !in_memory_queue
+                .topics
+                .read()
+                .unwrap()
+                .get("foobar")
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             *in_memory_queue
                 .topics
@@ -103,13 +100,15 @@ mod tests {
         let in_memory_queue = InMemoryQueue::new();
         let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_queue.add("foobar", record.clone());
-        assert!(!in_memory_queue
-            .topics
-            .read()
-            .unwrap()
-            .get("foobar")
-            .unwrap()
-            .is_empty());
+        assert!(
+            !in_memory_queue
+                .topics
+                .read()
+                .unwrap()
+                .get("foobar")
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             *in_memory_queue
                 .topics
@@ -123,12 +122,14 @@ mod tests {
         );
 
         let _ = in_memory_queue.fetch("foobar", 0);
-        assert!(in_memory_queue
-            .topics
-            .read()
-            .unwrap()
-            .get("foobar")
-            .unwrap()
-            .is_empty());
+        assert!(
+            in_memory_queue
+                .topics
+                .read()
+                .unwrap()
+                .get("foobar")
+                .unwrap()
+                .is_empty()
+        );
     }
 }

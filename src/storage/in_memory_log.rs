@@ -6,6 +6,8 @@ use log::{error, info};
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 
+use crate::error::HerbertError;
+
 use super::{RecordStorage, StoredRecord};
 
 #[derive(Debug, Clone, Copy)]
@@ -31,17 +33,15 @@ impl InMemoryLog {
 }
 
 impl RecordStorage for InMemoryLog {
-    fn add(&self, topic: &str, record: StoredRecord) -> Result<()> {
-        let mut write = self
-            .topics
-            .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+    fn add(&self, topic: &str, record: StoredRecord) -> Result<(), HerbertError> {
+        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
 
         let mut offset_write = self
             .offsets
             .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|e| HerbertError::PoisonError)?;
         let offset_queue = offset_write
             .entry(topic.to_string())
             .or_insert(VecDeque::new());
@@ -74,12 +74,12 @@ impl RecordStorage for InMemoryLog {
         Ok(())
     }
 
-    fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes> {
+    fn fetch(&self, topic: &str, fetch_offset: i64) -> Result<Bytes, HerbertError> {
         let mut offset_write = self
             .offsets
             // FIXME don't hold a write lock on a fetch.
             .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|e| HerbertError::PoisonError)?;
 
         let offset_queue = offset_write
             .entry(topic.to_string())
@@ -95,10 +95,8 @@ impl RecordStorage for InMemoryLog {
             }
         };
 
-        let mut write = self
-            .topics
-            .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
         let mut batches: Vec<RecordBatch> = Vec::new();
@@ -157,13 +155,15 @@ mod tests {
         let in_memory_log = InMemoryLog::new();
         let record = StoredRecord::Raw(Bytes::from("test"));
         let _ = in_memory_log.add("foobar", record.clone());
-        assert!(!in_memory_log
-            .topics
-            .read()
-            .unwrap()
-            .get("foobar")
-            .unwrap()
-            .is_empty());
+        assert!(
+            !in_memory_log
+                .topics
+                .read()
+                .unwrap()
+                .get("foobar")
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             *in_memory_log
                 .topics
