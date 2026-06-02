@@ -127,7 +127,7 @@ impl TopicManager {
         let read = self
             .topic_metadatas
             .read()
-            .map_err(|e| HerbertError::PoisonError)?;
+            .map_err(|_e| HerbertError::PoisonError)?;
         Ok(read.contains_key(topic))
     }
 
@@ -135,7 +135,7 @@ impl TopicManager {
         let read = self
             .topic_metadatas
             .read()
-            .map_err(|e| HerbertError::PoisonError)?;
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let stored_record = if let Some(metadata) = read.get(topic) {
             if let Some(ref schema) = metadata.schema {
@@ -159,9 +159,9 @@ impl TopicManager {
         };
 
         // WAL commit happens here
-        self.wal.add(topic, stored_record);
+        self.wal.add(topic, stored_record)?;
         if let Ok(true) = self.wal.need_to_flush() {
-            self.wal.flush(&self.backend);
+            self.wal.flush(&self.backend)?;
         };
         Ok(())
     }
@@ -174,7 +174,7 @@ impl TopicManager {
         let mut write = self
             .topic_metadatas
             .write()
-            .map_err(|e| HerbertError::PoisonError)?;
+            .map_err(|_e| HerbertError::PoisonError)?;
         if write.contains_key(topic) {
             return Err(HerbertError::TopicAlreadyExists(topic.to_string()));
         } else {
@@ -188,18 +188,18 @@ impl TopicManager {
     }
 
     pub fn recover(&self) -> Result<(), HerbertError> {
-        let read = self
+        let _read = self
             .wal
             .file
             .lock()
-            .map_err(|e| HerbertError::PoisonError)?;
+            .map_err(|_e| HerbertError::PoisonError)?;
 
-        let file = File::open(&self.config.wal_path)?;
+        let file = File::open(&self.config.wal_path).map_err(|_e| HerbertError::NoWalFileFound)?;
         let mut buf_reader = BufReader::new(file);
 
         loop {
             let mut contents = Vec::new();
-            let result = buf_reader.read_until(b'\n', &mut contents)?;
+            buf_reader.read_until(b'\n', &mut contents)?;
 
             // Read everything
             if contents.len() == 0 {
@@ -230,7 +230,7 @@ impl TopicManager {
 
                         // If topic does not yet exist create it with schema.
                         if !self.exists(&topic)? {
-                            self.create(&topic, Some(record_batch.schema().as_ref().to_owned()));
+                            self.create(&topic, Some(record_batch.schema().as_ref().to_owned()))?;
                         };
                         let record = StoredRecord::Batch(record_batch);
                         self.backend.add(&topic, record)?;

@@ -38,14 +38,14 @@ impl WriteAheadLog {
     }
 
     pub fn add(&self, topic: &str, records: StoredRecord) -> Result<(), HerbertError> {
-        let mut write = self.file.lock().map_err(|e| HerbertError::PoisonError)?;
+        let mut write = self.file.lock().map_err(|_e| HerbertError::PoisonError)?;
 
         let buffer = self.serialize(topic, &records)?;
-        write.write(&buffer);
+        write.write(&buffer)?;
 
         self.buffer
             .lock()
-            .map_err(|e| HerbertError::PoisonError)?
+            .map_err(|_e| HerbertError::PoisonError)?
             .push((topic.to_string(), records));
 
         Ok(())
@@ -85,13 +85,13 @@ impl WriteAheadLog {
         info!("Flushing the WAL");
         self.file
             .lock()
-            .map_err(|e| HerbertError::PoisonError)?
+            .map_err(|_e| HerbertError::PoisonError)?
             .flush()?;
 
         for (topic, record) in self
             .buffer
             .lock()
-            .map_err(|e| HerbertError::PoisonError)?
+            .map_err(|_e| HerbertError::PoisonError)?
             .drain(..)
         {
             backend.add(&topic, record)?;
@@ -104,7 +104,7 @@ impl WriteAheadLog {
         Ok(self
             .buffer
             .lock()
-            .map_err(|e| HerbertError::PoisonError)?
+            .map_err(|_e| HerbertError::PoisonError)?
             .len()
             >= self.config.num_uncommitted_messages)
     }

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -7,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::config::Config;
+use crate::{config::Config, error::HerbertError};
 
 pub struct OffsetManager {
     pub offsets: RwLock<HashMap<(String, String), i64>>,
@@ -22,11 +21,11 @@ impl OffsetManager {
         }
     }
 
-    pub fn get_offset(&self, consumer_group: &str, topic: &str) -> Result<i64> {
+    pub fn get_offset(&self, consumer_group: &str, topic: &str) -> Result<i64, HerbertError> {
         let offsets = self
             .offsets
             .read()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let offset = offsets
             .get(&(consumer_group.to_string(), topic.to_string()))
@@ -35,20 +34,25 @@ impl OffsetManager {
         Ok(offset)
     }
 
-    pub fn set_offset(&self, consumer_group: &str, topic: &str, offset: i64) -> Result<()> {
+    pub fn set_offset(
+        &self,
+        consumer_group: &str,
+        topic: &str,
+        offset: i64,
+    ) -> Result<(), HerbertError> {
         self.offsets
             .write()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?
+            .map_err(|_e| HerbertError::PoisonError)?
             .insert((consumer_group.to_string(), topic.to_string()), offset);
         self.flush()?;
         Ok(())
     }
 
-    pub fn flush(&self) -> Result<()> {
+    pub fn flush(&self) -> Result<(), HerbertError> {
         let offsets = self
             .offsets
             .read()
-            .map_err(|e| anyhow::anyhow!("RwLock poisoned: {}", e))?;
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let json = serde_json::to_string(
             &offsets
@@ -57,16 +61,18 @@ impl OffsetManager {
                     (format!("{}:{}", consumer_group, topic), *offset)
                 })
                 .collect::<HashMap<String, i64>>(),
-        )?;
-        dbg!("i am flushing offsets");
+        )
+        .map_err(|_e| HerbertError::Serialization)?;
         fs::write(&self.config.offset_path, json)?;
 
         Ok(())
     }
 
-    pub fn recover(&mut self) -> Result<()> {
-        let json = fs::read(&self.config.offset_path)?;
-        let stored_offsets: HashMap<String, i64> = serde_json::from_slice(&json)?;
+    pub fn recover(&mut self) -> Result<(), HerbertError> {
+        let json =
+            fs::read(&self.config.offset_path).map_err(|_e| HerbertError::NoOffsetFileFound)?;
+        let stored_offsets: HashMap<String, i64> =
+            serde_json::from_slice(&json).map_err(|_e| HerbertError::Deserialization)?;
 
         let offsets = stored_offsets
             .iter()
@@ -102,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    fn test_set_offset() -> Result<()> {
+    fn test_set_offset() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let offset_path = temp_dir.path().join("offset.json");
         let config = Arc::new(Config::test_default().with_offset_path(&offset_path));
@@ -123,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_offset() -> Result<()> {
+    fn test_get_offset() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let offset_path = temp_dir.path().join("offset.json");
         let config = Arc::new(Config::test_default().with_offset_path(&offset_path));
@@ -137,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_offset_for_new_consumer_group() -> Result<()> {
+    fn test_get_offset_for_new_consumer_group() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let offset_path = temp_dir.path().join("offset.json");
         let config = Arc::new(Config::test_default().with_offset_path(&offset_path));
@@ -150,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_flush_and_recover() -> Result<()> {
+    fn test_flush_and_recover() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let offset_path = temp_dir.path().join("offset.json");
         let config = Arc::new(Config::test_default().with_offset_path(&offset_path));

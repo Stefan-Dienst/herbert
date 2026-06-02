@@ -2,7 +2,6 @@ use std::io;
 use std::string::FromUtf8Error;
 
 use arrow_schema::ArrowError;
-use arrow_schema::Schema;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,11 +15,20 @@ pub enum HerbertError {
     #[error("Lock poisoned")]
     PoisonError,
 
+    #[error("serialization failed")]
+    Serialization,
+
+    #[error("deserialization failed")]
+    Deserialization,
+
     #[error("unknown  indicator encountered: {0}")]
     IndicatorError(u8),
 
     #[error("no topic data found")]
     NoTopicData,
+
+    #[error("topic list is empty")]
+    EmptyTopicList,
 
     #[error("no partition data found")]
     NoPartitionData,
@@ -42,6 +50,12 @@ pub enum HerbertError {
 
     #[error("queue is empty")]
     EmptyQueue,
+
+    #[error("no WAL file found")]
+    NoWalFileFound,
+
+    #[error("no offset file found")]
+    NoOffsetFileFound,
 
     #[error("something unexpected happened")]
     UnknownError,

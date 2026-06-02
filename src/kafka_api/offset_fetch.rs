@@ -1,4 +1,3 @@
-use anyhow::Result;
 use bytes::Bytes;
 use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequestTopic;
 use kafka_protocol::messages::offset_fetch_response::{
@@ -10,6 +9,7 @@ use log::error;
 use std::sync::Arc;
 use std::vec;
 
+use crate::error::HerbertError;
 use crate::offset_manager::OffsetManager;
 
 pub fn create_offset_fetch_request(consumer_group: &str, topic: &str) -> OffsetFetchRequest {
@@ -27,17 +27,17 @@ pub fn handle_offset_fetch_request(
     buf: Bytes,
     api_version: i16,
     offset_manager: &Arc<OffsetManager>,
-) -> Result<OffsetFetchResponse> {
+) -> Result<OffsetFetchResponse, HerbertError> {
     let offset_fetch_request = OffsetFetchRequest::decode(&mut Bytes::from(buf), api_version);
     match offset_fetch_request {
         Ok(OffsetFetchRequest {
             group_id, topics, ..
         }) => {
             // NOTE: Right now we always only assume one topic with one partition.
-            let topic_vec = topics.ok_or_else(|| anyhow::anyhow!("No topic data"))?;
+            let topic_vec = topics.ok_or_else(|| HerbertError::NoTopicData)?;
             let first_topic = topic_vec
                 .get(0)
-                .ok_or_else(|| anyhow::anyhow!("Topic list is empty"))?;
+                .ok_or_else(|| HerbertError::EmptyTopicList)?;
             let topic_name = first_topic.name.to_string();
             let offset = offset_manager.get_offset(&group_id, &topic_name)?;
 
@@ -69,7 +69,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_handle_offset_fetch_request() -> Result<()> {
+    fn test_handle_offset_fetch_request() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let offset_path = temp_dir.path().join("offset.json");
         let config = Arc::new(Config::test_default().with_offset_path(&offset_path));

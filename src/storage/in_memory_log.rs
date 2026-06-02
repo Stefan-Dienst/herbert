@@ -1,4 +1,3 @@
-use anyhow::Result;
 use arrow_array::RecordBatch;
 use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
@@ -34,14 +33,17 @@ impl InMemoryLog {
 
 impl RecordStorage for InMemoryLog {
     fn add(&self, topic: &str, record: StoredRecord) -> Result<(), HerbertError> {
-        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+        let mut write = self
+            .topics
+            .write()
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
 
         let mut offset_write = self
             .offsets
             .write()
-            .map_err(|e| HerbertError::PoisonError)?;
+            .map_err(|_e| HerbertError::PoisonError)?;
         let offset_queue = offset_write
             .entry(topic.to_string())
             .or_insert(VecDeque::new());
@@ -79,7 +81,7 @@ impl RecordStorage for InMemoryLog {
             .offsets
             // FIXME don't hold a write lock on a fetch.
             .write()
-            .map_err(|e| HerbertError::PoisonError)?;
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let offset_queue = offset_write
             .entry(topic.to_string())
@@ -95,7 +97,10 @@ impl RecordStorage for InMemoryLog {
             }
         };
 
-        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+        let mut write = self
+            .topics
+            .write()
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();

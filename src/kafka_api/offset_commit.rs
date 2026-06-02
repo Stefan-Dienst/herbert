@@ -1,4 +1,3 @@
-use anyhow::Result;
 use bytes::Bytes;
 use kafka_protocol::messages::offset_commit_request::{
     OffsetCommitRequestPartition, OffsetCommitRequestTopic,
@@ -8,6 +7,7 @@ use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::error;
 use std::sync::Arc;
 
+use crate::error::HerbertError;
 use crate::offset_manager::OffsetManager;
 
 pub fn create_offset_commit_request(
@@ -33,21 +33,19 @@ pub fn handle_offset_commit_request(
     buf: Bytes,
     api_version: i16,
     offset_manager: &Arc<OffsetManager>,
-) -> Result<OffsetCommitResponse> {
+) -> Result<OffsetCommitResponse, HerbertError> {
     let offset_commit_request = OffsetCommitRequest::decode(&mut Bytes::from(buf), api_version);
     match offset_commit_request {
         Ok(OffsetCommitRequest {
             group_id, topics, ..
         }) => {
             // NOTE: Right now we always only assume one topic with one partition.
-            let first_topic = topics
-                .get(0)
-                .ok_or_else(|| anyhow::anyhow!("No Topic data available in fetch request"))?;
+            let first_topic = topics.get(0).ok_or_else(|| HerbertError::NoTopicData)?;
             let topic_name = first_topic.name.to_string();
             let first_partition = first_topic
                 .partitions
                 .get(0)
-                .ok_or_else(|| anyhow::anyhow!("No partition data available in fetch request"))?;
+                .ok_or_else(|| HerbertError::NoPartitionData)?;
             let offset = first_partition.committed_offset;
             let _ = offset_manager.set_offset(&group_id, &topic_name, offset);
         }
@@ -70,7 +68,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_handle_offset_commit_request() -> Result<()> {
+    fn test_handle_offset_commit_request() -> Result<(), HerbertError> {
         let temp_dir = TempDir::new()?;
         let offset_path = temp_dir.path().join("offset.json");
         let config = Arc::new(Config::test_default().with_offset_path(&offset_path));

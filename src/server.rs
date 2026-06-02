@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::error::HerbertError;
 use crate::herbert_api::Request as HerbertRequest;
 use crate::kafka_api::handle_fetch_request;
 use crate::kafka_api::handle_offset_commit_request;
@@ -182,10 +183,31 @@ pub fn run() -> std::io::Result<()> {
     let mut om = OffsetManager::new(config.clone());
 
     // Recover after crash.
-    // FIXME: handle errors here correcltey. If no file exists is fine, but if something goes wrong
-    // panic.
-    tm.recover();
-    om.recover();
+    match tm.recover() {
+        Err(HerbertError::NoWalFileFound) => {
+            info!("No WAL file was found, hence no recovery needed.")
+        }
+        Err(e) => {
+            error!("Recovery from WAL file was unscessful: {e}");
+            panic!()
+        }
+        Ok(()) => {
+            info!("Recovery from the WAL file was successful.")
+        }
+    };
+
+    match om.recover() {
+        Err(HerbertError::NoOffsetFileFound) => {
+            info!("No offset file was found, hence no recovery needed.")
+        }
+        Err(e) => {
+            error!("Recovery from offset file was unscessful: {e}");
+            panic!()
+        }
+        Ok(()) => {
+            info!("Recovery from the offset file was successful.")
+        }
+    }
 
     let topic_manager = Arc::new(tm);
     let offset_manager = Arc::new(om);

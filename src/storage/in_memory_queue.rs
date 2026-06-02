@@ -1,4 +1,3 @@
-use anyhow::Result;
 use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
 use log::info;
@@ -23,7 +22,10 @@ impl InMemoryQueue {
 
 impl RecordStorage for InMemoryQueue {
     fn add(&self, topic: &str, record: StoredRecord) -> Result<(), HerbertError> {
-        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+        let mut write = self
+            .topics
+            .write()
+            .map_err(|_e| HerbertError::PoisonError)?;
 
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         queue.push_front(record);
@@ -32,7 +34,10 @@ impl RecordStorage for InMemoryQueue {
     }
 
     fn fetch(&self, topic: &str, _fetch_offset: i64) -> Result<Bytes, HerbertError> {
-        let mut write = self.topics.write().map_err(|e| HerbertError::PoisonError)?;
+        let mut write = self
+            .topics
+            .write()
+            .map_err(|_e| HerbertError::PoisonError)?;
         let queue = write.entry(topic.to_string()).or_insert(VecDeque::new());
         let mut records = BytesMut::new();
         while !queue.is_empty() {

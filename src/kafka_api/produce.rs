@@ -1,4 +1,3 @@
-use anyhow::Result;
 use bytes::Bytes;
 use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
 use kafka_protocol::messages::{ProduceRequest, ProduceResponse, TopicName};
@@ -6,6 +5,7 @@ use kafka_protocol::protocol::{Decodable, StrBytes};
 use log::error;
 use std::sync::Arc;
 
+use crate::error::HerbertError;
 use crate::topic_manager::TopicManager;
 
 pub fn create_produce_request(topic: &str, record: Bytes) -> ProduceRequest {
@@ -31,7 +31,7 @@ pub fn handle_produce_request(
     buf: Bytes,
     api_version: i16,
     topic_manager: &Arc<TopicManager>,
-) -> Result<ProduceResponse> {
+) -> Result<ProduceResponse, HerbertError> {
     let produce_request = ProduceRequest::decode(&mut Bytes::from(buf), api_version);
     match produce_request {
         Ok(ProduceRequest { topic_data, .. }) => {
@@ -47,22 +47,20 @@ pub fn handle_produce_request(
 fn handle_topic_data(
     topic_data: Vec<TopicProduceData>,
     topic_manager: &Arc<TopicManager>,
-) -> Result<()> {
-    let first_topic = topic_data
-        .get(0)
-        .ok_or_else(|| anyhow::anyhow!("No topic data provided"))?;
+) -> Result<(), HerbertError> {
+    let first_topic = topic_data.get(0).ok_or_else(|| HerbertError::NoTopicData)?;
 
     let topic_name = &first_topic.name;
 
     let partition = first_topic
         .partition_data
         .get(0)
-        .ok_or_else(|| anyhow::anyhow!("No partition data available"))?;
+        .ok_or_else(|| HerbertError::NoPartitionData)?;
 
     let records = partition
         .records
         .clone()
-        .ok_or_else(|| anyhow::anyhow!("No records available"))?;
+        .ok_or_else(|| HerbertError::NoRecordData)?;
 
     topic_manager.add(topic_name, records)?;
     Ok(())
