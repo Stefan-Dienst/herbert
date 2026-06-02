@@ -57,6 +57,9 @@ pub enum HerbertError {
     #[error("no offset file found")]
     NoOffsetFileFound,
 
+    #[error("request could not be decoded")]
+    RequestDecode,
+
     #[error("something unexpected happened")]
     UnknownError,
 }

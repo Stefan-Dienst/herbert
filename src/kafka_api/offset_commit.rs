@@ -49,9 +49,9 @@ pub fn handle_offset_commit_request(
             let offset = first_partition.committed_offset;
             let _ = offset_manager.set_offset(&group_id, &topic_name, offset);
         }
-        _ => {
+        Err(e) => {
             error!("Something wrong with the fetch request.");
-            panic!();
+            return Err(HerbertError::RequestDecode);
         }
     }
     Ok(OffsetCommitResponse::default())

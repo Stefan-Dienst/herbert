@@ -51,9 +51,9 @@ pub fn handle_offset_fetch_request(
             response.topics.push(topic_response);
             Ok(response)
         }
-        _ => {
+        Err(e) => {
             error!("Something wrong with the fetch request.");
-            panic!();
+            return Err(HerbertError::RequestDecode);
         }
     }
 }
