@@ -14,6 +14,8 @@ use herbert::client::create_topic;
 use herbert::client::produce;
 use herbert::client::produce_record_batch;
 
+//FIXME: handle errors in this module without unwrap.
+
 #[derive(Parser, Debug)]
 #[command(name = "herbert--cli")]
 #[command(about = "This is herbert, say hello to him.", long_about = None)]

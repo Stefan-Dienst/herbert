@@ -23,6 +23,8 @@ use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::messages::{ApiKey, RequestHeader};
 use kafka_protocol::protocol::{Decodable, Encodable};
 
+//FIXME: handle errors in this module without unwrap.
+
 fn create_request_header(request_api_key: i16, request_api_version: i16) -> RequestHeader {
     let mut header = RequestHeader::default();
     header.request_api_key = request_api_key;

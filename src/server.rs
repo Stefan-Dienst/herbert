@@ -29,6 +29,8 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
+//FIXME: handle errors in this module without unwrap.
+
 fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
     let mut len_buf = [0u8; 4];
     stream
