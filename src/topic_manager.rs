@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_create_topic() {
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_exists() {
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_create_topic_with_schema() {
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -352,18 +352,17 @@ mod tests {
             ("c", Utf8, ["alpha", "beta", "gamma"])
         )?;
 
-        let mut wal = WriteAheadLog::new(config.clone())?;
-        wal.add("foobar", StoredRecord::Batch(batch.clone()));
-        wal.add("foobar", StoredRecord::Batch(batch.clone()));
+        let wal = WriteAheadLog::new(config.clone())?;
+        wal.add("foobar", StoredRecord::Batch(batch.clone()))?;
+        wal.add("foobar", StoredRecord::Batch(batch.clone()))?;
 
-        wal.add("test", StoredRecord::Batch(batch.clone()));
+        wal.add("test", StoredRecord::Batch(batch.clone()))?;
 
-        wal.file.lock().unwrap().flush();
+        wal.file.lock().unwrap().flush()?;
 
-        let mut topic_manager = TopicManager::default_log().with_config(config.clone());
+        let topic_manager = TopicManager::default_log().with_config(config.clone());
 
-        println!("hi");
-        let result = topic_manager.recover()?;
+        let _result = topic_manager.recover()?;
 
         dbg!(&topic_manager.exists("foobar")?);
         assert!(&topic_manager.exists("foobar")?);

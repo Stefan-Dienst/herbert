@@ -112,8 +112,6 @@ impl WriteAheadLog {
 mod tests {
     use std::io::BufReader;
 
-    use crate::topic_manager;
-
     use super::*;
     use arrow_array::record_batch;
     use arrow_schema;
@@ -139,10 +137,10 @@ mod tests {
         let wal_path = temp_dir.path().join("test.wal");
         let config = Arc::new(Config::test_default().with_wal_path(&wal_path));
 
-        let mut wal = WriteAheadLog::new(config)?;
-        wal.add("foobar", StoredRecord::Raw(Bytes::from("test")));
+        let wal = WriteAheadLog::new(config)?;
+        wal.add("foobar", StoredRecord::Raw(Bytes::from("test")))?;
 
-        wal.file.lock().unwrap().flush();
+        wal.file.lock().unwrap().flush()?;
         let file = File::open(wal_path).unwrap();
         let mut buf_reader = BufReader::new(file);
         let mut contents = Vec::new();
@@ -169,10 +167,10 @@ mod tests {
             ("c", Utf8, ["alpha", "beta", "gamma"])
         )?;
 
-        let mut wal = WriteAheadLog::new(config)?;
-        wal.add("foobar", StoredRecord::Batch(batch.clone()));
+        let wal = WriteAheadLog::new(config)?;
+        wal.add("foobar", StoredRecord::Batch(batch.clone()))?;
 
-        wal.file.lock().unwrap().flush();
+        wal.file.lock().unwrap().flush()?;
         let file = File::open(wal_path).unwrap();
         let mut buf_reader = BufReader::new(file);
         let mut contents = Vec::new();

@@ -1,4 +1,3 @@
-use std::fmt::format;
 use std::net::TcpStream;
 use std::process::Stdio;
 use std::process::{Child, Command};
@@ -6,7 +5,7 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-use arrow_array::{record_batch, ArrayRef, Int32Array, RecordBatch, StringArray};
+use arrow_array::{ArrayRef, Int32Array, RecordBatch, StringArray};
 use arrow_schema::{DataType, Field, Schema};
 use herbert::client::{
     consume, consume_record_batches, create_topic, produce, produce_record_batch,

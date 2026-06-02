@@ -81,7 +81,7 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -100,7 +100,7 @@ mod tests {
     fn test_handle_topic_data_failure() {
         let produce_request = ProduceRequest::default();
 
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -116,7 +116,7 @@ mod tests {
         let topic_name = "test";
         let record = Bytes::from("yeah");
 
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -143,7 +143,7 @@ mod tests {
     fn test_handle_produce_request_failure() {
         let produce_request = ProduceRequest::default();
 
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()

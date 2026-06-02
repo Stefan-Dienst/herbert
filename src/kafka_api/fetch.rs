@@ -73,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request() {
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
         let topic_manager = Arc::new(
             TopicManager::default()
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_handle_fetch_request_with_offset() {
-        let temp_dir = TempDir::new().expect(("Should be able to create temp dir for testing."));
+        let temp_dir = TempDir::new().expect("Should be able to create temp dir for testing.");
         let wal_path = temp_dir.path().join("test.wal");
 
         let topic_manager = Arc::new(TopicManager::new(
