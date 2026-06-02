@@ -1,12 +1,11 @@
 use std::{
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
-    path::{Path, PathBuf},
+    io::{BufWriter, Write},
     sync::{Arc, Mutex},
 };
 
-use arrow_ipc::{reader::StreamReader, writer::StreamWriter};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use arrow_ipc::writer::StreamWriter;
+use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use log::info;
 
@@ -14,7 +13,6 @@ use crate::{
     config::Config,
     error::HerbertError,
     storage::{RecordStorage, StoredRecord},
-    topic_manager::TopicManager,
 };
 
 pub struct WriteAheadLog {

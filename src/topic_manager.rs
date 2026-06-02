@@ -4,15 +4,13 @@ use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use bytes::Bytes;
 use log::{error, info};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, BufWriter, Cursor, Read, Write},
-    path::Path,
+    io::{BufRead, BufReader, Cursor, Read},
     sync::{Arc, RwLock},
 };
 
-use crate::config;
 use crate::config::Config;
 use crate::error::HerbertError;
 use crate::storage::{
@@ -268,6 +266,7 @@ mod tests {
     use super::*;
     use arrow_array::record_batch;
     use arrow_schema::{DataType, Field, Schema};
+    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
