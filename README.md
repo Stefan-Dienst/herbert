@@ -82,7 +82,7 @@ cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topic foobar --con
  - [x] Create error.rs with comprehensive error types
  - [ ] Remove all unwrap() and panic() calls
  - [ ] Add graceful shutdown handling
- - [ ] Write README.md, CONTRIBUTING.md, LICENSE
+ - [x] Write README.md, LICENSE
  - [ ] Add inline documentation to all public APIs
  - [ ] Add unit tests for all modules
  - [ ] Add integration tests (produce/consume flows)
