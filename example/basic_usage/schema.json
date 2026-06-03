@@ -1,0 +1,21 @@
+{
+  "fields": [
+    {
+      "name": "id",
+      "nullable": false,
+      "data_type": "Int64",
+      "metadata": {},
+      "dict_id": 0,
+      "dict_is_ordered": false
+    },
+    {
+      "name": "name",
+      "nullable": false,
+      "data_type": "Utf8",
+      "metadata": {},
+      "dict_id": 0,
+      "dict_is_ordered": false
+    }
+  ],
+  "metadata": {}
+}

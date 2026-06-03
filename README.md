@@ -19,10 +19,10 @@ Consumers of a topic can commit offsets on a record level, which are also persis
 Start a Herbert instance by running
 
 ```sh
-cargo run --bin herbert
+RUST_LOG=info cargo run --bin herbert
 ```
 
-To create a schema aware topic, first prepare a schema in a json format, e.g.
+To create a schema aware topic, first prepare a schema in a json format, e.g. see the `examples/basic_usage` dir
 
 ```json
 {
@@ -51,7 +51,7 @@ To create a schema aware topic, first prepare a schema in a json format, e.g.
 and then use
 
 ```
-cargo run --bin herbert-cli create-topic --broker 127.0.0.1:9002 --topic foobar --schema-path schema.json
+RUST_LOG=info cargo run --bin herbert-cli create-topic --broker 127.0.0.1:9002 --topic foobar --schema-path schema.json
 ```
 
 To produce data prepare records as a JSON line file, e.g.
@@ -64,13 +64,13 @@ To produce data prepare records as a JSON line file, e.g.
 and then run
 
 ```sh
-cargo run --bin herbert-cli produce-record-batch --broker 127.0.0.1:9001 --topic foobar --schema-path schema.json --data-path data.jsonl
+RUST_LOG=info cargo run --bin herbert-cli produce-record-batch --broker 127.0.0.1:9001 --topic foobar --schema-path schema.json --data-path data.jsonl
 ```
 
 To consume the data run:
 
 ```sh
-cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topic foobar --consumer-group "xyz"
+RUST_LOG=info cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topic foobar --consumer-group "xyz" --max-messages 1
 ```
 
 
