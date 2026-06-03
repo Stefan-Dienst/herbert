@@ -81,19 +81,19 @@ RUST_LOG=info cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topi
 
  - [x] Create error.rs with comprehensive error types
  - [x] Remove all unwrap() and panic() calls
- - [ ] Add graceful shutdown handling
+ - [ ] Add graceful shutdown handling -> avoid until migrate to tokio
  - [x] Write README.md, LICENSE
  - [ ] Add inline documentation to all public APIs
  - [ ] Add unit tests for all modules
- - [ ] Add integration tests (produce/consume flows)
+ - [x] Add integration tests (produce/consume flows)
  - [ ] Add config file support (figment + TOML)
  - [ ] Set up GitHub Actions CI
 
 ### Features
+ - [ ] Use [tokio](https://docs.rs/tokio/latest/tokio/) runtime.
  - [ ] Add background task that compacts in-memory Arrow Topic to table using either [parquet](https://parquet.apache.org/) or [vortex](https://vortex.dev/).
  - [ ] Add support for open table formats. 
  - [ ] Add a python API with [PyO3](https://pyo3.rs/v0.28.3/).
- - [ ] Use [tokio](https://docs.rs/tokio/latest/tokio/) runtime.
  - [ ] Use object storage for durability, see [object_store](https://docs.rs/object_store/latest/object_store/). 
  - [ ] Improve concurrent performance by replacing RwLock
  - [ ] Integrate SQL API with [Apache Datafusion](https://datafusion.apache.org/)
