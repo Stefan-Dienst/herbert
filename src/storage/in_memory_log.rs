@@ -1,7 +1,7 @@
 use arrow_array::RecordBatch;
 use arrow_ipc::writer::StreamWriter;
 use bytes::{BufMut, Bytes, BytesMut};
-use log::{error, info};
+use log::{info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 
@@ -89,7 +89,7 @@ impl RecordStorage for InMemoryLog {
         let record_offset = match offset_queue.get(fetch_offset as usize) {
             Some(record_offset) => record_offset,
             None => {
-                error!(
+                warn!(
                     "Could not find the RecordOffset for offset: {:?}",
                     fetch_offset
                 );
