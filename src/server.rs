@@ -29,8 +29,6 @@ use std::{
     net::{TcpListener, TcpStream},
 };
 
-//FIXME: handle errors in this module without unwrap.
-
 fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
     let mut len_buf = [0u8; 4];
     stream
@@ -60,11 +58,12 @@ fn handle_kafka_connection(
                 let api_key = buffer.peek_bytes(0..2).get_i16();
                 let api_version = buffer.peek_bytes(2..4).get_i16();
                 let header_version = ApiKey::try_from(api_key)
-                    .unwrap()
+                    .map_err(|_e| HerbertError::Decode)?
                     .request_header_version(api_version);
                 // info!("The header version: {:?}", header_version);
 
-                let header = RequestHeader::decode(&mut buffer, header_version).unwrap();
+                let header = RequestHeader::decode(&mut buffer, header_version)
+                    .map_err(|_e| HerbertError::Decode)?;
                 let api_key = ApiKey::try_from(header.request_api_key);
 
                 info!("The api key: {:?}", api_key);
@@ -75,7 +74,9 @@ fn handle_kafka_connection(
                 // Set the response correlation_id to the one of the request match them.
                 response_header.correlation_id = header.correlation_id;
                 let response_header_api_version = 1;
-                let mut size = response_header.compute_size(header_version).unwrap();
+                let mut size = response_header
+                    .compute_size(header_version)
+                    .map_err(|_e| HerbertError::ComputeSize)?;
 
                 //TODO: Wrap response in an enum, and implement ecode trait for it so that I can
                 //treat all response the same. This is needed as encode is not object safe to g
@@ -104,8 +105,11 @@ fn handle_kafka_connection(
 
                         size += response_header
                             .compute_size(response_header_api_version)
-                            .unwrap();
-                        size += response.compute_size(header.request_api_version).unwrap();
+                            .map_err(|_e| HerbertError::ComputeSize)?;
+                        size += response
+                            .compute_size(header.request_api_version)
+                            .map_err(|_e| HerbertError::ComputeSize)?;
+
                         response_buffer.put_u32(size as u32);
                         let _ = response_header
                             .encode(&mut response_buffer, response_header_api_version);
@@ -120,8 +124,12 @@ fn handle_kafka_connection(
 
                         size += response_header
                             .compute_size(response_header_api_version)
-                            .unwrap();
-                        size += response.compute_size(header.request_api_version).unwrap();
+                            .map_err(|_e| HerbertError::ComputeSize)?;
+
+                        size += response
+                            .compute_size(header.request_api_version)
+                            .map_err(|_e| HerbertError::ComputeSize)?;
+
                         response_buffer.put_u32(size as u32);
                         let _ = response_header
                             .encode(&mut response_buffer, response_header_api_version);
@@ -132,9 +140,10 @@ fn handle_kafka_connection(
                     }
                 }
 
-                // dbg!(&response_buffer);
-                stream.write(&response_buffer[..]).unwrap();
-                stream.flush().unwrap();
+                stream
+                    .write(&response_buffer[..])
+                    .map_err(|e| HerbertError::IO(e))?;
+                stream.flush().map_err(|e| HerbertError::IO(e))?;
             }
             Err(..) => {
                 error!("Error");

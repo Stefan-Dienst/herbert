@@ -80,7 +80,7 @@ cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topic foobar --con
 ### Polish current state
 
  - [x] Create error.rs with comprehensive error types
- - [ ] Remove all unwrap() and panic() calls
+ - [x] Remove all unwrap() and panic() calls
  - [ ] Add graceful shutdown handling
  - [x] Write README.md, LICENSE
  - [ ] Add inline documentation to all public APIs

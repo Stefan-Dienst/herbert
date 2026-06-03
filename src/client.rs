@@ -5,12 +5,12 @@ use std::net::TcpStream;
 use std::thread::sleep;
 use std::time::Duration;
 
+use crate::error::HerbertError;
 use crate::herbert_api::Request;
 use crate::kafka_api::create_fetch_request;
 use crate::kafka_api::create_offset_commit_request;
 use crate::kafka_api::create_offset_fetch_request;
 use crate::kafka_api::create_produce_request;
-use anyhow::Result;
 use arrow_array::RecordBatch;
 use arrow_ipc::reader::StreamReader;
 use arrow_ipc::writer::StreamWriter;
@@ -23,8 +23,6 @@ use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::messages::{ApiKey, RequestHeader};
 use kafka_protocol::protocol::{Decodable, Encodable};
 
-//FIXME: handle errors in this module without unwrap.
-
 fn create_request_header(request_api_key: i16, request_api_version: i16) -> RequestHeader {
     let mut header = RequestHeader::default();
     header.request_api_key = request_api_key;
@@ -32,18 +30,29 @@ fn create_request_header(request_api_key: i16, request_api_version: i16) -> Requ
     header
 }
 
-fn create_buffer(header: &RequestHeader, request: impl Encodable) -> BytesMut {
-    let mut size = header.compute_size(header.request_api_version).unwrap();
-    size += request.compute_size(header.request_api_version).unwrap();
+fn create_buffer(
+    header: &RequestHeader,
+    request: impl Encodable,
+) -> Result<BytesMut, HerbertError> {
+    let mut size = header
+        .compute_size(header.request_api_version)
+        .map_err(|_e| HerbertError::ComputeSize)?;
+    size += request
+        .compute_size(header.request_api_version)
+        .map_err(|_e| HerbertError::ComputeSize)?;
 
     let mut request_buffer = BytesMut::new();
     request_buffer.put_u32(size as u32);
-    let _ = header.encode(&mut request_buffer, header.request_api_version);
-    let _ = request.encode(&mut request_buffer, header.request_api_version);
-    request_buffer
+    header
+        .encode(&mut request_buffer, header.request_api_version)
+        .map_err(|_e| HerbertError::Encode)?;
+    request
+        .encode(&mut request_buffer, header.request_api_version)
+        .map_err(|_e| HerbertError::Encode)?;
+    Ok(request_buffer)
 }
 
-pub fn produce(broker: &str, topic: &str, message: &str) -> Result<()> {
+pub fn produce(broker: &str, topic: &str, message: &str) -> Result<(), HerbertError> {
     let mut stream = TcpStream::connect(broker)?;
     let produce_request_api_version = 9;
 
@@ -51,13 +60,17 @@ pub fn produce(broker: &str, topic: &str, message: &str) -> Result<()> {
     let record = Bytes::from(message.to_string());
     let produce_request = create_produce_request(&topic, record);
 
-    let request_buffer = create_buffer(&header, produce_request);
+    let request_buffer = create_buffer(&header, produce_request)?;
     stream.write(&request_buffer)?;
 
     Ok(())
 }
 
-pub fn produce_record_batch(broker: &str, topic: &str, record_batch: &RecordBatch) -> Result<()> {
+pub fn produce_record_batch(
+    broker: &str,
+    topic: &str,
+    record_batch: &RecordBatch,
+) -> Result<(), HerbertError> {
     let mut stream = TcpStream::connect(broker)?;
     let produce_request_api_version = 9;
 
@@ -71,7 +84,7 @@ pub fn produce_record_batch(broker: &str, topic: &str, record_batch: &RecordBatc
     let record = Bytes::from(buffer);
     let produce_request = create_produce_request(&topic, record);
 
-    let request_buffer = create_buffer(&header, produce_request);
+    let request_buffer = create_buffer(&header, produce_request)?;
     stream.write(&request_buffer)?;
 
     Ok(())
@@ -81,7 +94,7 @@ pub fn consume_continuos(
     topic: &str,
     max_messages: i32,
     consumer_group: &str,
-) -> Result<()> {
+) -> Result<(), HerbertError> {
     let mut stream = TcpStream::connect(broker)?;
 
     let initial_offset = get_offset(&mut stream, consumer_group, topic)?;
@@ -92,7 +105,7 @@ pub fn consume_continuos(
     let mut offset = initial_offset;
     loop {
         let fetch_request = create_fetch_request(&topic, max_messages, offset);
-        let request_buffer = create_buffer(&header, fetch_request);
+        let request_buffer = create_buffer(&header, fetch_request)?;
         println!("Consumed records:");
         let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
         if records.is_empty() {
@@ -104,7 +117,7 @@ pub fn consume_continuos(
         if records.len() < 8 {
             let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
             for part in &parts {
-                println!("{:?}", std::str::from_utf8(&part).unwrap());
+                println!("{:?}", String::from_utf8(part.to_owned())?);
             }
             offset += parts.len() as i64;
         } else {
@@ -123,7 +136,7 @@ pub fn consume_continuos(
             } else {
                 let parts: Vec<Vec<u8>> = records.split(|b| *b == 0).map(|s| s.to_vec()).collect();
                 for part in &parts {
-                    println!("{:?}", std::str::from_utf8(&part).unwrap());
+                    println!("{:?}", String::from_utf8(part.to_owned())?);
                 }
                 offset += parts.len() as i64;
             }
@@ -139,7 +152,7 @@ pub fn consume(
     topic: &str,
     max_messages: i32,
     consumer_group: &str,
-) -> Result<Vec<Vec<u8>>> {
+) -> Result<Vec<Vec<u8>>, HerbertError> {
     let mut stream = TcpStream::connect(broker)?;
     let initial_offset = get_offset(&mut stream, consumer_group, topic)?;
 
@@ -147,7 +160,7 @@ pub fn consume(
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
     let fetch_request = create_fetch_request(&topic, max_messages, initial_offset);
 
-    let request_buffer = create_buffer(&header, fetch_request);
+    let request_buffer = create_buffer(&header, fetch_request)?;
 
     let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
     if records.is_empty() {
@@ -167,7 +180,7 @@ pub fn consume_record_batches(
     topic: &str,
     max_messages: i32,
     consumer_group: &str,
-) -> Result<Vec<arrow_array::RecordBatch>> {
+) -> Result<Vec<arrow_array::RecordBatch>, HerbertError> {
     let mut stream = TcpStream::connect(broker)?;
     let initial_offset = get_offset(&mut stream, consumer_group, topic)?;
 
@@ -175,7 +188,7 @@ pub fn consume_record_batches(
     let header = create_request_header(ApiKey::Fetch as i16, fetch_request_api_version);
     let fetch_request = create_fetch_request(&topic, max_messages, initial_offset);
 
-    let request_buffer = create_buffer(&header, fetch_request);
+    let request_buffer = create_buffer(&header, fetch_request)?;
 
     let records = get_records(&mut stream, &request_buffer, fetch_request_api_version)?;
     if records.is_empty() {
@@ -197,12 +210,16 @@ pub fn consume_record_batches(
     Ok(batches)
 }
 
-fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Result<i64> {
+fn get_offset(
+    stream: &mut TcpStream,
+    consumer_group: &str,
+    topic: &str,
+) -> Result<i64, HerbertError> {
     let offset_fetch_request_api_version = 6;
     let offset_fetch_header =
         create_request_header(ApiKey::OffsetFetch as i16, offset_fetch_request_api_version);
     let offset_fetch_request = create_offset_fetch_request(consumer_group, topic);
-    let offset_fetch_request_buffer = create_buffer(&offset_fetch_header, offset_fetch_request);
+    let offset_fetch_request_buffer = create_buffer(&offset_fetch_header, offset_fetch_request)?;
 
     stream.write(&offset_fetch_request_buffer)?;
     // Read response
@@ -211,18 +228,18 @@ fn get_offset(stream: &mut TcpStream, consumer_group: &str, topic: &str) -> Resu
     // Decode response
     let mut new_buf = Bytes::from(Vec::from(&buffer[4..]));
     // Decode header if not accessed to consume bytes.
-    let _header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+    ResponseHeader::decode(&mut new_buf, 1).map_err(|_e| HerbertError::Decode)?;
 
     let offset_fetch_response =
         OffsetFetchResponse::decode(&mut Bytes::from(new_buf), offset_fetch_request_api_version)
-            .unwrap();
+            .map_err(|_e| HerbertError::Decode)?;
     let got_offset = offset_fetch_response
         .topics
         .get(0)
-        .unwrap()
+        .ok_or(HerbertError::NoTopicData)?
         .partitions
         .get(0)
-        .unwrap()
+        .ok_or(HerbertError::NoPartitionData)?
         .committed_offset
         .clone();
     Ok(got_offset)
@@ -232,7 +249,7 @@ fn get_records(
     stream: &mut TcpStream,
     request_buffer: &BytesMut,
     fetch_request_api_version: i16,
-) -> Result<Bytes> {
+) -> Result<Bytes, HerbertError> {
     stream.write(&request_buffer)?;
 
     // Read response length
@@ -250,20 +267,21 @@ fn get_records(
     // Decode response
     let mut new_buf = Bytes::from(buffer);
     // Decode header if not accessed to consume bytes.
-    let _header = ResponseHeader::decode(&mut new_buf, 1).unwrap();
+    ResponseHeader::decode(&mut new_buf, 1).map_err(|_e| HerbertError::Decode)?;
 
     let fetch_response =
-        FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version).unwrap();
+        FetchResponse::decode(&mut Bytes::from(new_buf), fetch_request_api_version)
+            .map_err(|_e| HerbertError::Decode)?;
     let records: Bytes = fetch_response
         .responses
         .get(0)
-        .unwrap()
+        .ok_or(HerbertError::NoTopicData)?
         .partitions
         .get(0)
-        .unwrap()
+        .ok_or(HerbertError::NoPartitionData)?
         .records
         .clone()
-        .unwrap();
+        .ok_or(HerbertError::NoRecordData)?;
 
     Ok(records)
 }
@@ -273,26 +291,26 @@ fn set_offset(
     consumer_group: &str,
     topic: &str,
     offset: i64,
-) -> Result<()> {
+) -> Result<(), HerbertError> {
     let offset_commit_request_api_version = 9;
     let offset_commit_header = create_request_header(
         ApiKey::OffsetCommit as i16,
         offset_commit_request_api_version,
     );
     let offset_commit_request = create_offset_commit_request(consumer_group, topic, offset);
-    let offset_offset_request_buffer = create_buffer(&offset_commit_header, offset_commit_request);
+    let offset_offset_request_buffer = create_buffer(&offset_commit_header, offset_commit_request)?;
 
     stream.write(&offset_offset_request_buffer)?;
     Ok(())
 }
 
-pub fn create_topic(broker: &str, topic: &str, schema: Option<Schema>) -> Result<()> {
+pub fn create_topic(broker: &str, topic: &str, schema: Option<Schema>) -> Result<(), HerbertError> {
     let mut stream = TcpStream::connect(broker)?;
     let request = Request::CreateTopic {
         topic: topic.into(),
         schema: schema,
     };
-    let encoded = serde_json::to_vec(&request)?;
+    let encoded = serde_json::to_vec(&request).map_err(|_e| HerbertError::Encode)?;
     let len = encoded.len() as u32;
     stream.write_u32::<BigEndian>(len)?;
     stream.write(&encoded)?;

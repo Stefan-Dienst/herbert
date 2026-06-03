@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 
 use anyhow::Result;
+use anyhow::bail;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use arrow_schema::SchemaRef;
@@ -13,8 +14,6 @@ use herbert::client::create_topic;
 
 use herbert::client::produce;
 use herbert::client::produce_record_batch;
-
-//FIXME: handle errors in this module without unwrap.
 
 #[derive(Parser, Debug)]
 #[command(name = "herbert--cli")]
@@ -102,13 +101,15 @@ fn load_schema_from_json(schema_path: &str) -> Result<Schema> {
 }
 
 fn load_record_batch_from_json(data_path: &str, schema: SchemaRef) -> Result<RecordBatch> {
-    let file = File::open(data_path).unwrap();
+    let file = File::open(data_path)?;
 
-    let mut json = arrow_json::ReaderBuilder::new(schema)
-        .build(BufReader::new(file))
-        .unwrap();
-    let batch = json.next().unwrap().unwrap();
-    Ok(batch)
+    let mut json = arrow_json::ReaderBuilder::new(schema).build(BufReader::new(file))?;
+    match json.next() {
+        Some(Ok(batch)) => Ok(batch),
+        _ => {
+            bail!("error loading records from json")
+        }
+    }
 }
 
 fn main() {

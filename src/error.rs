@@ -12,6 +12,15 @@ pub enum HerbertError {
     #[error("io error: {0}")]
     FromUtf8(#[from] FromUtf8Error),
 
+    #[error("error computing size")]
+    ComputeSize,
+
+    #[error("decoding failed")]
+    Decode,
+
+    #[error("encoding failed")]
+    Encode,
+
     #[error("Lock poisoned")]
     PoisonError,
 
