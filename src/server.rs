@@ -11,7 +11,6 @@ use crate::topic_manager::TopicManager;
 use anyhow::Context;
 use anyhow::Result;
 use byteorder::BigEndian;
-use byteorder::ReadBytesExt;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::ApiKey;
 use kafka_protocol::messages::RequestHeader;
@@ -19,28 +18,26 @@ use kafka_protocol::messages::ResponseHeader;
 use kafka_protocol::protocol::buf::ByteBuf;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use log::{error, info};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::thread;
-use std::{
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
-};
+use tokio::net::{TcpListener, TcpStream};
 
-fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
+async fn read_message_len(stream: &mut TcpStream) -> Result<usize> {
     let mut len_buf = [0u8; 4];
     stream
         .read_exact(&mut len_buf)
+        .await
         .context("Failed to read message length")?;
-    let msg_len = (&len_buf[..])
-        .read_u32::<BigEndian>()
+    let msg_len = byteorder::ReadBytesExt::read_u32::<BigEndian>(&mut &len_buf[..])
         .context("Failed to parse message length")? as usize;
     Ok(msg_len)
 }
 
-fn handle_kafka_connection(
+async fn handle_kafka_connection(
     mut stream: TcpStream,
     topic_manager: Arc<TopicManager>,
     offset_manager: Arc<OffsetManager>,
@@ -48,11 +45,11 @@ fn handle_kafka_connection(
     info!("I have received a connection!");
 
     loop {
-        let msg_len = read_message_len(&mut stream)?;
+        let msg_len = read_message_len(&mut stream).await?;
         let mut buf = vec![0u8; msg_len];
 
-        match stream.read_exact(&mut buf) {
-            Ok(()) => {
+        match stream.read_exact(&mut buf).await {
+            Ok(_) => {
                 let mut buffer = Bytes::from(buf);
 
                 let api_key = buffer.peek_bytes(0..2).get_i16();
@@ -141,9 +138,10 @@ fn handle_kafka_connection(
                 }
 
                 stream
-                    .write(&response_buffer[..])
+                    .write_all(&response_buffer[..])
+                    .await
                     .map_err(|e| HerbertError::IO(e))?;
-                stream.flush().map_err(|e| HerbertError::IO(e))?;
+                stream.flush().await.map_err(|e| HerbertError::IO(e))?;
             }
             Err(..) => {
                 error!("Error");
@@ -154,14 +152,14 @@ fn handle_kafka_connection(
     Ok(())
 }
 
-fn handle_herbert_connection(
+async fn handle_herbert_connection(
     mut stream: TcpStream,
     topic_manager: Arc<TopicManager>,
 ) -> Result<()> {
     info!("I have received a connection!");
-    let msg_len = read_message_len(&mut stream)?;
+    let msg_len = read_message_len(&mut stream).await?;
     let mut buf = vec![0u8; msg_len];
-    stream.read_exact(&mut buf)?;
+    stream.read_exact(&mut buf).await?;
 
     let request: HerbertRequest = serde_json::from_slice(&buf)?;
 
@@ -178,7 +176,43 @@ fn handle_herbert_connection(
     Ok(())
 }
 
-pub fn run() -> std::io::Result<()> {
+async fn run_kafka_listener(
+    listener: TcpListener,
+    topic_manager: Arc<TopicManager>,
+    offset_manager: Arc<OffsetManager>,
+) -> std::io::Result<()> {
+    loop {
+        let (stream, _) = listener.accept().await?;
+
+        let tm = topic_manager.clone();
+        let om = offset_manager.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = handle_kafka_connection(stream, tm, om).await {
+                error!("Connection error: {}", e);
+            }
+        });
+    }
+}
+
+async fn run_herbert_listener(
+    listener: TcpListener,
+    topic_manager: Arc<TopicManager>,
+) -> std::io::Result<()> {
+    loop {
+        let (stream, _) = listener.accept().await?;
+
+        let tm = topic_manager.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = handle_herbert_connection(stream, tm).await {
+                error!("Connection error: {}", e);
+            }
+        });
+    }
+}
+
+pub async fn run() -> std::io::Result<()> {
     let ip_address = "127.0.0.1";
     let config = Arc::new(Config::from_env());
 
@@ -228,49 +262,23 @@ pub fn run() -> std::io::Result<()> {
         "Starting the Kafka listener. Listening on {:?}",
         kafka_address
     );
-    let kafka_listener = TcpListener::bind(kafka_address)?;
-    let tm_kafka_clone = Arc::clone(&topic_manager);
-    let om_kafka_clone = Arc::clone(&offset_manager);
-
-    thread::spawn(move || {
-        for stream in kafka_listener.incoming() {
-            match stream {
-                Ok(stream) => {
-                    let tm_clone = Arc::clone(&tm_kafka_clone);
-                    let om_clone = Arc::clone(&om_kafka_clone);
-                    thread::spawn(|| handle_kafka_connection(stream, tm_clone, om_clone));
-                }
-                Err(..) => {
-                    error!("Oh oh!");
-                }
-            }
-        }
-    });
+    let kafka_listener = TcpListener::bind(kafka_address).await?;
 
     // Create Herbert listener
     info!(
         "Starting the Herbert listener. Listening on {:?}",
         herbert_address
     );
-    let herbert_listener = TcpListener::bind(herbert_address)?;
-    let tm_herbert_clone = Arc::clone(&topic_manager);
+    let herbert_listener = TcpListener::bind(herbert_address).await?;
 
-    thread::spawn(move || {
-        for stream in herbert_listener.incoming() {
-            match stream {
-                Ok(stream) => {
-                    let tm_clone = Arc::clone(&tm_herbert_clone);
-                    thread::spawn(|| handle_herbert_connection(stream, tm_clone));
-                }
-                Err(..) => {
-                    error!("Oh oh!");
-                }
-            }
-        }
-    });
+    tokio::try_join!(
+        run_kafka_listener(
+            kafka_listener,
+            topic_manager.clone(),
+            offset_manager.clone(),
+        ),
+        run_herbert_listener(herbert_listener, topic_manager.clone(),),
+    )?;
 
-    // Prevent main loop from exiting
-    loop {
-        std::thread::park();
-    }
+    Ok(())
 }
