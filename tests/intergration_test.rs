@@ -157,3 +157,26 @@ fn test_record_batches() {
     let records = consume_record_batches(&kafka_api, topic, 1, "consumer-1");
     assert_eq!(records.unwrap(), vec![batch]);
 }
+
+#[test]
+fn many_parallel_connections() {
+    let kafka_port = 9007;
+    let herbert_port = 9008;
+    let broker = Arc::new(format!("127.0.0.1:{}", kafka_port));
+    let topic = "test3";
+
+    let _child = start_server(kafka_port, herbert_port);
+
+    let mut handles = vec![];
+
+    for i in 0..100 {
+        let broker = broker.clone();
+        handles.push(std::thread::spawn(move || {
+            produce(broker.as_str(), topic, &format!("msg-{i}")).unwrap();
+        }));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+}
