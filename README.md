@@ -91,7 +91,9 @@ RUST_LOG=info cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topi
 
 ### Features
  - [x] Use [tokio](https://docs.rs/tokio/latest/tokio/) runtime.
- - [ ] Improve concurrent performance by replacing RwLock
+ - [ ] Add benchmarks
+ - [ ] Improve concurrent performance by replacing RwLock with one tokio task per topic
+ - [ ] Intoduce static partitions (and think about options for dynamic partitioning)
  - [ ] Add background task that compacts in-memory Arrow Topic to table using either [parquet](https://parquet.apache.org/) or [vortex](https://vortex.dev/).
  - [ ] Add support for open table formats. 
  - [ ] Add a python API with [PyO3](https://pyo3.rs/v0.28.3/).
