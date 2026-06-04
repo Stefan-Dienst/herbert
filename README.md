@@ -90,11 +90,11 @@ RUST_LOG=info cargo run --bin herbert-cli consume --broker 127.0.0.1:9001 --topi
  - [ ] Set up GitHub Actions CI
 
 ### Features
- - [ ] Use [tokio](https://docs.rs/tokio/latest/tokio/) runtime.
+ - [x] Use [tokio](https://docs.rs/tokio/latest/tokio/) runtime.
+ - [ ] Improve concurrent performance by replacing RwLock
  - [ ] Add background task that compacts in-memory Arrow Topic to table using either [parquet](https://parquet.apache.org/) or [vortex](https://vortex.dev/).
  - [ ] Add support for open table formats. 
  - [ ] Add a python API with [PyO3](https://pyo3.rs/v0.28.3/).
  - [ ] Use object storage for durability, see [object_store](https://docs.rs/object_store/latest/object_store/). 
- - [ ] Improve concurrent performance by replacing RwLock
  - [ ] Integrate SQL API with [Apache Datafusion](https://datafusion.apache.org/)
 
