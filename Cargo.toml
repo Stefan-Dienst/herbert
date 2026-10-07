@@ -10,6 +10,7 @@ arrow-array = "57.3.0"
 arrow-ipc = "57.3.0"
 arrow-json = "57.3.0"
 arrow-schema = { version = "57.3.0", features = ["serde"] }
+boxcar = "0.2.14"
 byteorder = "1.5.0"
 bytes = "1.10.1"
 clap = { version = "4.5.35", features = ["derive"] }

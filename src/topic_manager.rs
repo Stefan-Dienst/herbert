@@ -14,7 +14,7 @@ use std::{
 use crate::config::Config;
 use crate::error::HerbertError;
 use crate::storage::{
-    RecordStorage, StoredRecord, in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue,
+    in_memory_log::InMemoryLog, in_memory_queue::InMemoryQueue, RecordStorage, StoredRecord,
 };
 use crate::wal::WriteAheadLog;
 
@@ -73,6 +73,13 @@ impl TopicMetadata {
     }
 }
 
+// TODO: What are the responsilibitles?
+// Should this even hold the metadata or should every StreamTable to this itself?
+//
+// In the end this should just be used for getting the data to the actor that is responsilbe for
+// writing it to the correct partition. But introducing this takes time.
+//
+// TODO: Rename to StreamTableManager
 pub struct TopicManager {
     backend: Arc<dyn RecordStorage>,
     topic_metadatas: RwLock<HashMap<String, TopicMetadata>>,
@@ -279,13 +286,11 @@ mod tests {
         );
 
         let _ = topic_manager.create("foobar", None);
-        assert!(
-            topic_manager
-                .topic_metadatas
-                .read()
-                .unwrap()
-                .contains_key("foobar")
-        );
+        assert!(topic_manager
+            .topic_metadatas
+            .read()
+            .unwrap()
+            .contains_key("foobar"));
         let result = topic_manager.create("foobar", None);
         assert!(result.is_err());
     }
@@ -321,13 +326,11 @@ mod tests {
         ]);
 
         let _ = topic_manager.create("foobar", Some(schema.clone()));
-        assert!(
-            topic_manager
-                .topic_metadatas
-                .read()
-                .unwrap()
-                .contains_key("foobar")
-        );
+        assert!(topic_manager
+            .topic_metadatas
+            .read()
+            .unwrap()
+            .contains_key("foobar"));
         assert_eq!(
             topic_manager
                 .topic_metadatas
